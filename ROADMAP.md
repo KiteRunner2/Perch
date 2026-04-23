@@ -19,16 +19,15 @@ items into "shipped" with the commit SHA.
 - [x] Tab badge + "new since last visit" indicator (`7299d85`)
 - [x] PR comments + reviews + diff stats in the detail drawer
       (timeline thread matches Claude Design's pattern)
+- [x] Inline review comments in the timeline with `path:line` label
+      (also fixed dropping empty-body COMMENTED reviews that had
+      inline-only feedback)
 
 ## Up next
 
 - [ ] **Click a repo in the sidebar to scope the view.** The sidebar
   already lists repos with counts; make them filter pills that narrow
   every bucket to the selected repo.
-- [ ] **Inline review comments in the timeline.** We currently fetch
-  review bodies but not their inline diff comments. Add
-  `reviews.nodes.comments { path, line, body }` to surface reviewer
-  nits alongside the summary body.
 
 ## Ideas / parking lot
 

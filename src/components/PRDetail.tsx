@@ -462,6 +462,7 @@ const EVENT_META: Record<
   'review-approved': { dot: 'var(--ok)', verb: 'approved' },
   'review-changes': { dot: 'var(--err)', verb: 'requested changes' },
   'review-comment': { dot: 'var(--info)', verb: 'reviewed' },
+  'inline-comment': { dot: 'var(--info)', verb: 'commented on' },
   comment: { dot: 'var(--info)', verb: 'commented' },
 };
 
@@ -474,6 +475,10 @@ function TimelineItem({ event }: { event: TimelineEvent }) {
       return '';
     }
   })();
+  const locationLabel =
+    event.kind === 'inline-comment' && event.path
+      ? `${event.path}${event.line != null ? `:${event.line}` : ''}`
+      : null;
   return (
     <div style={{ position: 'relative', paddingLeft: 30, marginBottom: 12 }}>
       <div
@@ -502,6 +507,22 @@ function TimelineItem({ event }: { event: TimelineEvent }) {
           @{event.author.login}
         </span>
         <span style={{ color: 'var(--fg-2)' }}>{meta.verb}</span>
+        {locationLabel && (
+          <span
+            className="mono"
+            style={{
+              color: 'var(--fg-1)',
+              fontSize: 11,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              minWidth: 0,
+            }}
+            title={locationLabel}
+          >
+            {locationLabel}
+          </span>
+        )}
         <span style={{ flex: 1 }} />
         <span
           className="mono"

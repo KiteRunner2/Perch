@@ -65,16 +65,20 @@ describe('transformDashboard', () => {
       reviews: {
         nodes: [
           {
+            id: 'R1',
             author: { login: 'bob' },
             state: 'CHANGES_REQUESTED',
             submittedAt: t1,
             body: 'Please fix the migration',
+            comments: { nodes: [] },
           },
           {
+            id: 'R2',
             author: { login: 'carol' },
             state: 'COMMENTED',
             submittedAt: t2,
             body: '',
+            comments: { nodes: [] },
           },
         ],
       },
@@ -97,6 +101,50 @@ describe('transformDashboard', () => {
       'comment',
     ]);
     expect(tl[1]!.body).toBe('Please fix the migration');
+  });
+
+  it('surfaces inline review comments even when the review body is empty', () => {
+    const pr = makeGqlPR({
+      createdAt: '2026-04-20T10:00:00Z',
+      reviews: {
+        nodes: [
+          {
+            id: 'R1',
+            author: { login: 'bob' },
+            state: 'COMMENTED',
+            submittedAt: '2026-04-20T11:00:00Z',
+            body: '',
+            comments: {
+              nodes: [
+                {
+                  id: 'RC1',
+                  body: 'nit: naming',
+                  path: 'src/foo.ts',
+                  line: 42,
+                  originalLine: 42,
+                  createdAt: '2026-04-20T11:00:05Z',
+                },
+                {
+                  id: 'RC2',
+                  body: 'also: null check',
+                  path: 'src/bar.ts',
+                  line: 17,
+                  originalLine: null,
+                  createdAt: '2026-04-20T11:00:10Z',
+                },
+              ],
+            },
+          },
+        ],
+      },
+    });
+    const tl = transformDashboard(makeResponse([pr])).prs[0]!.timeline;
+    const kinds = tl.map((e) => e.kind);
+    // Two inline-comment events after "opened"; no review-level event
+    // because the top-level body was empty.
+    expect(kinds).toEqual(['opened', 'inline-comment', 'inline-comment']);
+    expect(tl[1]!.path).toBe('src/foo.ts');
+    expect(tl[1]!.line).toBe(42);
   });
 
   it('dedupes a PR that appears in multiple result sets', () => {

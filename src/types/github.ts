@@ -31,11 +31,22 @@ export type GqlRequestedReviewer =
   | ({ __typename: 'Team' } & GqlTeam)
   | { __typename: string };
 
+export interface GqlReviewComment {
+  id: string;
+  body: string;
+  path: string;
+  line: number | null;
+  originalLine: number | null;
+  createdAt: string;
+}
+
 export interface GqlReview {
+  id: string;
   author: GqlUser | null;
   state: ReviewState;
   submittedAt: string | null;
   body: string;
+  comments: { nodes: GqlReviewComment[] };
 }
 
 export interface GqlIssueComment {

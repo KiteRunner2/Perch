@@ -256,6 +256,14 @@ function buildTimeline(
 
   for (const r of pr.reviews.nodes) {
     if (!r.author || !r.submittedAt) continue;
+    const reviewAuthor = toUser(r.author);
+    const trimmedBody = r.body.trim();
+    const inlineCount = r.comments.nodes.length;
+
+    // Emit the review-level event when it carries signal (approval,
+    // request-changes, or a non-empty commented body, or there were
+    // inline comments). Empty COMMENTED reviews with no inline comments
+    // are submission artifacts from pending-review flows — skip those.
     let kind: TimelineEventKind | null = null;
     switch (r.state) {
       case 'APPROVED':
@@ -265,22 +273,38 @@ function buildTimeline(
         kind = 'review-changes';
         break;
       case 'COMMENTED':
-        // Only surface inline-review summaries that had an actual body;
-        // empty COMMENTED reviews are typically created when a reviewer
-        // left inline nits and nothing to say at the top level.
-        if (r.body.trim().length === 0) continue;
-        kind = 'review-comment';
+        if (trimmedBody.length > 0) kind = 'review-comment';
         break;
       default:
-        continue; // PENDING, DISMISSED
+        break; // PENDING, DISMISSED — skip
     }
-    events.push({
-      id: `${pr.id}-review-${r.author.login}-${r.submittedAt}`,
-      kind,
-      author: toUser(r.author),
-      at: r.submittedAt,
-      body: r.body.trim() || undefined,
-    });
+    if (kind) {
+      events.push({
+        id: r.id,
+        kind,
+        author: reviewAuthor,
+        at: r.submittedAt,
+        body: trimmedBody || undefined,
+      });
+    } else if (inlineCount === 0) {
+      // No review-level signal and no inline comments — drop entirely.
+      continue;
+    }
+
+    // Surface each inline review comment as its own event so a reviewer
+    // who only left diff nits still shows up in the timeline.
+    for (const c of r.comments.nodes) {
+      if (!c.body || c.body.trim().length === 0) continue;
+      events.push({
+        id: c.id,
+        kind: 'inline-comment',
+        author: reviewAuthor,
+        at: c.createdAt,
+        body: c.body,
+        path: c.path,
+        line: c.line ?? c.originalLine ?? undefined,
+      });
+    }
   }
 
   for (const c of pr.comments.nodes) {

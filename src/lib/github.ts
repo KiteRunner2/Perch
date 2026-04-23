@@ -63,6 +63,7 @@ export const DASHBOARD_QUERY = /* GraphQL */ `
     }
     reviews(last: 20) {
       nodes {
+        id
         author {
           login
           ... on User { avatarUrl }
@@ -70,6 +71,16 @@ export const DASHBOARD_QUERY = /* GraphQL */ `
         state
         submittedAt
         body
+        comments(first: 10) {
+          nodes {
+            id
+            body
+            path
+            line
+            originalLine
+            createdAt
+          }
+        }
       }
     }
     comments(last: 20) {

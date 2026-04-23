@@ -36,6 +36,7 @@ export type TimelineEventKind =
   | 'review-approved'
   | 'review-changes'
   | 'review-comment'
+  | 'inline-comment'
   | 'comment';
 
 export interface TimelineEvent {
@@ -44,6 +45,10 @@ export interface TimelineEvent {
   author: DashboardUser;
   at: string;
   body?: string;
+  /** File path for inline-comment events. */
+  path?: string;
+  /** Diff line for inline-comment events. */
+  line?: number;
 }
 
 export interface DashboardPR {
