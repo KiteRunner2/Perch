@@ -58,8 +58,7 @@ export function PRRow({ pr, focused, isNew, onSelect, onOpen }: PRRowProps) {
   }
 
   const rowStyle: CSSProperties = {
-    display: 'grid',
-    gridTemplateColumns: 'minmax(0,1fr) auto auto auto auto auto',
+    display: 'flex',
     alignItems: 'center',
     gap: 14,
     height: 'var(--row-h)',
@@ -94,7 +93,17 @@ export function PRRow({ pr, focused, isNew, onSelect, onOpen }: PRRowProps) {
       }}
     >
       {/* Left: new-indicator + author + title + repo + labels */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          minWidth: 0,
+          // Shrink when the row is tight; don't grow past content so the
+          // indicators sit right next to the title.
+          flex: '0 1 auto',
+        }}
+      >
         <span
           aria-hidden={!isNew}
           title={isNew ? 'New since your last visit' : undefined}
@@ -164,37 +173,48 @@ export function PRRow({ pr, focused, isNew, onSelect, onOpen }: PRRowProps) {
         </div>
       </div>
 
-      {/* Approval */}
-      <ApprovalChip
-        state={pr.approvalState}
-        done={pr.approvalCount}
-        total={Math.max(pr.reviewerCount, pr.approvalCount)}
-      />
-
-      {/* CI */}
-      <CIStatusChip state={pr.ciStatus} compact />
-
-      {/* Reviewers */}
-      <AvatarStack users={pr.reviewers} max={3} size={18} />
-
-      {/* Escalation */}
-      <span style={{ width: 44, textAlign: 'right' }}>
-        {pr.escalate && <EscalateGlyph />}
-      </span>
-
-      {/* Time */}
-      <span
-        className="mono num"
+      {/* Approval + CI + reviewers sit right next to the title area. */}
+      <div
         style={{
-          fontSize: 11,
-          color: pr.escalate ? 'var(--warn)' : 'var(--fg-2)',
-          fontWeight: 500,
-          minWidth: 48,
-          textAlign: 'right',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          flexShrink: 0,
         }}
       >
-        {relTime(pr.updatedAt)}
-      </span>
+        <ApprovalChip
+          state={pr.approvalState}
+          done={pr.approvalCount}
+          total={Math.max(pr.reviewerCount, pr.approvalCount)}
+        />
+        <CIStatusChip state={pr.ciStatus} compact />
+        <AvatarStack users={pr.reviewers} max={3} size={18} />
+      </div>
+
+      {/* Escalation + time pinned to the far right via margin-left: auto. */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          marginLeft: 'auto',
+          flexShrink: 0,
+        }}
+      >
+        {pr.escalate && <EscalateGlyph />}
+        <span
+          className="mono num"
+          style={{
+            fontSize: 11,
+            color: pr.escalate ? 'var(--warn)' : 'var(--fg-2)',
+            fontWeight: 500,
+            minWidth: 48,
+            textAlign: 'right',
+          }}
+        >
+          {relTime(pr.updatedAt)}
+        </span>
+      </div>
 
       {focused && (
         <div
