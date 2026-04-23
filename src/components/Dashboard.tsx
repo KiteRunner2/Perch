@@ -113,6 +113,7 @@ export function Dashboard() {
       <Sidebar
         prs={query.data?.prs ?? []}
         viewerLogin={query.data?.viewer.login ?? null}
+        viewerAvatarUrl={query.data?.viewer.avatarUrl}
         lastUpdated={lastUpdatedLabel}
       />
       <main

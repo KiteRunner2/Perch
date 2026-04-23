@@ -4,10 +4,16 @@ import { Kbd } from './primitives';
 interface SidebarProps {
   prs: DashboardPR[];
   viewerLogin: string | null;
+  viewerAvatarUrl?: string;
   lastUpdated: string;
 }
 
-export function Sidebar({ prs, viewerLogin, lastUpdated }: SidebarProps) {
+export function Sidebar({
+  prs,
+  viewerLogin,
+  viewerAvatarUrl,
+  lastUpdated,
+}: SidebarProps) {
   const mine = prs.filter((p) => p.viewerIsAuthor);
   const reviewing = prs.filter((p) => !p.viewerIsAuthor);
 
@@ -90,20 +96,32 @@ export function Sidebar({ prs, viewerLogin, lastUpdated }: SidebarProps) {
         >
           <span
             style={{
-              width: 14,
-              height: 14,
+              width: 16,
+              height: 16,
               borderRadius: 3,
               background: 'var(--violet)',
               color: '#0b0d10',
-              fontSize: 9,
+              fontSize: 10,
               fontWeight: 700,
               fontFamily: 'var(--font-mono)',
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
+              overflow: 'hidden',
+              flexShrink: 0,
             }}
           >
-            {viewerLogin[0]?.toUpperCase()}
+            {viewerAvatarUrl ? (
+              <img
+                src={viewerAvatarUrl}
+                alt=""
+                width={16}
+                height={16}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+            ) : (
+              viewerLogin[0]?.toUpperCase()
+            )}
           </span>
           <span
             style={{
