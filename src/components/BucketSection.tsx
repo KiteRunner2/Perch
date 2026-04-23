@@ -5,6 +5,7 @@ import { PRRow } from './PRRow';
 interface Props {
   bucket: Bucket;
   selectedPRId: string | null;
+  newIds: Set<string>;
   onSelect: (id: string) => void;
   onOpen: (url: string) => void;
   emptyText?: string;
@@ -13,6 +14,7 @@ interface Props {
 export function BucketSection({
   bucket,
   selectedPRId,
+  newIds,
   onSelect,
   onOpen,
   emptyText,
@@ -115,6 +117,7 @@ export function BucketSection({
                 key={pr.id}
                 pr={pr}
                 focused={selectedPRId === pr.id}
+                isNew={newIds.has(pr.id)}
                 onSelect={() => onSelect(pr.id)}
                 onOpen={() => onOpen(pr.url)}
               />

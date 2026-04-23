@@ -15,6 +15,8 @@ import {
 interface PRRowProps {
   pr: DashboardPR;
   focused: boolean;
+  /** True when the PR wasn't present in the previous visit's snapshot. */
+  isNew: boolean;
   onSelect: () => void;
   /** Double-click opens the PR in a new tab. */
   onOpen: () => void;
@@ -40,7 +42,7 @@ function relTime(iso: string): string {
   }
 }
 
-export function PRRow({ pr, focused, onSelect, onOpen }: PRRowProps) {
+export function PRRow({ pr, focused, isNew, onSelect, onOpen }: PRRowProps) {
   const bg = focused ? 'var(--bg-3)' : 'transparent';
 
   function handleClick(e: MouseEvent<HTMLDivElement>) {
@@ -91,8 +93,20 @@ export function PRRow({ pr, focused, onSelect, onOpen }: PRRowProps) {
         if (!focused) (e.currentTarget as HTMLElement).style.background = 'transparent';
       }}
     >
-      {/* Left: author + title + repo + labels */}
+      {/* Left: new-indicator + author + title + repo + labels */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+        <span
+          aria-hidden={!isNew}
+          title={isNew ? 'New since your last visit' : undefined}
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: '50%',
+            background: isNew ? 'var(--accent)' : 'transparent',
+            boxShadow: isNew ? '0 0 0 3px rgba(106,169,255,0.22)' : 'none',
+            flexShrink: 0,
+          }}
+        />
         <Avatar user={pr.author} size={20} />
         <div
           style={{
