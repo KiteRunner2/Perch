@@ -1,18 +1,15 @@
 import type { DashboardPR } from '../types/dashboard';
-import { Kbd } from './primitives';
 
 interface SidebarProps {
   prs: DashboardPR[];
   viewerLogin: string | null;
   viewerAvatarUrl?: string;
-  lastUpdated: string;
 }
 
 export function Sidebar({
   prs,
   viewerLogin,
   viewerAvatarUrl,
-  lastUpdated,
 }: SidebarProps) {
   const mine = prs.filter((p) => p.viewerIsAuthor);
   const reviewing = prs.filter((p) => !p.viewerIsAuthor);
@@ -172,32 +169,6 @@ export function Sidebar({
       )}
 
       <span style={{ flex: 1 }} />
-
-      <div
-        style={{
-          padding: '8px 10px',
-          marginTop: 6,
-          fontSize: 10.5,
-          color: 'var(--fg-3)',
-          borderTop: '1px solid var(--line-1)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-        }}
-      >
-        <span
-          style={{
-            width: 6,
-            height: 6,
-            borderRadius: '50%',
-            background: 'var(--ok)',
-            boxShadow: '0 0 0 3px rgba(78,201,168,0.15)',
-          }}
-        />
-        <span>Synced · {lastUpdated}</span>
-        <span style={{ flex: 1 }} />
-        <Kbd>?</Kbd>
-      </div>
     </aside>
   );
 }

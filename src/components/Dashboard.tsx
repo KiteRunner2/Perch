@@ -114,7 +114,6 @@ export function Dashboard() {
         prs={query.data?.prs ?? []}
         viewerLogin={query.data?.viewer.login ?? null}
         viewerAvatarUrl={query.data?.viewer.avatarUrl}
-        lastUpdated={lastUpdatedLabel}
       />
       <main
         style={{
