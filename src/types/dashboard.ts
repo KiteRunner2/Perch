@@ -5,6 +5,7 @@ export type BucketId =
   | 'inreview'
   | 'stale'
   | 'team'
+  | 'merged'
   | 'other';
 
 export type CIStatus = 'success' | 'failure' | 'pending' | 'none';
@@ -76,6 +77,10 @@ export interface DashboardPR {
   waitingTimeMs: number;
   /** Escalate if waiting on viewer >24h. */
   escalate: boolean;
+  /** True when the PR is in the MERGED state. */
+  isMerged: boolean;
+  /** When the PR was merged, when applicable. */
+  mergedAt?: string;
   /** The review request for the viewer, set when viewer was requested. */
   viewerRequestedAt?: string;
   additions: number;

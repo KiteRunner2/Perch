@@ -9,6 +9,7 @@ export const DASHBOARD_QUERY = /* GraphQL */ `
     $searchQuery: String!
     $teamSearchQuery: String!
     $includeTeam: Boolean!
+    $mergedSearchQuery: String!
   ) {
     viewer {
       login
@@ -28,6 +29,11 @@ export const DASHBOARD_QUERY = /* GraphQL */ `
         ... on PullRequest { ...PRFields }
       }
     }
+    recentlyMerged: search(query: $mergedSearchQuery, type: ISSUE, first: 30) {
+      nodes {
+        ... on PullRequest { ...PRFields }
+      }
+    }
     rateLimit {
       remaining
       resetAt
@@ -40,9 +46,11 @@ export const DASHBOARD_QUERY = /* GraphQL */ `
     title
     url
     isDraft
+    state
     mergeable
     updatedAt
     createdAt
+    mergedAt
     additions
     deletions
     changedFiles
@@ -110,6 +118,21 @@ export const DASHBOARD_QUERY = /* GraphQL */ `
 
 export const SEARCH_QUERY = 'is:open is:pr review-requested:@me archived:false';
 
+/** Rolling window for the "Recently merged" bucket, in days. */
+export const MERGED_WINDOW_DAYS = 7;
+
+/**
+ * Build the "recently merged" search query, scoped to PRs the viewer
+ * either authored or reviewed, within the rolling window.
+ */
+export function buildMergedSearchQuery(
+  windowDays: number = MERGED_WINDOW_DAYS
+): string {
+  const threshold = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
+  const iso = threshold.toISOString().slice(0, 10); // YYYY-MM-DD
+  return `is:pr is:merged archived:false merged:>${iso} (author:@me OR reviewed-by:@me)`;
+}
+
 export function createClient(token: string): GraphQLClient {
   return new GraphQLClient(GITHUB_ENDPOINT, {
     headers: {
@@ -155,5 +178,6 @@ export async function fetchDashboard(
     // server-side but the variable is still validated as non-null String.
     teamSearchQuery: teamSearchQuery || 'is:open is:pr',
     includeTeam,
+    mergedSearchQuery: buildMergedSearchQuery(),
   });
 }

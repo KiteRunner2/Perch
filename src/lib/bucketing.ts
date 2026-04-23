@@ -7,6 +7,10 @@ const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
  * first match wins. See instructions.md for the spec.
  */
 export function bucketOf(pr: DashboardPR): BucketId {
+  // 0. Merged: PR is done — always wins so it never gets evaluated
+  //    against the open-PR rules below.
+  if (pr.isMerged) return 'merged';
+
   // 1. Waiting on me: viewer is a requested reviewer and hasn't acted.
   if (pr.viewerIsRequestedReviewer && !pr.viewerIsAuthor) {
     const acted =
@@ -61,6 +65,7 @@ export const BUCKET_PLAN: BucketPlan[] = [
   { id: 'stale', title: 'Stale', color: 'var(--bucket-stale)' },
   { id: 'team', title: 'Team', color: 'var(--info)' },
   { id: 'other', title: 'Other', color: 'var(--fg-3)' },
+  { id: 'merged', title: 'Recently merged', color: 'var(--violet)' },
 ];
 
 const BUCKET_ORDER: Record<BucketId, number> = {
@@ -71,9 +76,16 @@ const BUCKET_ORDER: Record<BucketId, number> = {
   stale: 4,
   team: 5,
   other: 6,
+  merged: 7,
 };
 
 function sortPRs(a: DashboardPR, b: DashboardPR): number {
+  // Merged PRs: most recent first (retrospective "what just shipped?").
+  if (a.isMerged && b.isMerged) {
+    const aT = a.mergedAt ? Date.parse(a.mergedAt) : 0;
+    const bT = b.mergedAt ? Date.parse(b.mergedAt) : 0;
+    return bT - aT;
+  }
   // Escalated (waiting >24h) first, then oldest updatedAt first within a bucket.
   if (a.escalate !== b.escalate) return a.escalate ? -1 : 1;
   return Date.parse(a.updatedAt) - Date.parse(b.updatedAt);
@@ -113,5 +125,6 @@ function bucketMeta(id: BucketId, items: DashboardPR[]): string | undefined {
   if (id === 'ready' && items.length > 0) return 'Safe to merge';
   if (id === 'stale' && items.length > 0) return '7+ days';
   if (id === 'team' && items.length > 0) return 'From tracked orgs';
+  if (id === 'merged' && items.length > 0) return 'Last 7 days';
   return undefined;
 }

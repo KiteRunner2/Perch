@@ -209,13 +209,24 @@ export function PRRow({ pr, focused, isNew, onSelect, onOpen }: PRRowProps) {
           className="mono num"
           style={{
             fontSize: 11,
-            color: pr.escalate ? 'var(--warn)' : 'var(--fg-2)',
+            color: pr.isMerged
+              ? 'var(--violet)'
+              : pr.escalate
+                ? 'var(--warn)'
+                : 'var(--fg-2)',
             fontWeight: 500,
             minWidth: 48,
             textAlign: 'right',
           }}
+          title={
+            pr.isMerged && pr.mergedAt
+              ? `Merged at ${pr.mergedAt}`
+              : pr.updatedAt
+          }
         >
-          {relTime(pr.updatedAt)}
+          {relTime(
+            pr.isMerged && pr.mergedAt ? pr.mergedAt : pr.updatedAt
+          )}
         </span>
       </div>
 

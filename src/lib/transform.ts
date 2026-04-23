@@ -220,6 +220,8 @@ export function transformPR(
   const waitingTimeMs = Math.max(0, Date.now() - updatedMs);
   const escalate = viewerIsRequestedReviewer && waitingTimeMs > 24 * 60 * 60 * 1000;
 
+  const isMerged = pr.state === 'MERGED';
+
   return {
     id: pr.id,
     number: pr.number,
@@ -242,6 +244,8 @@ export function transformPR(
     reviewers,
     waitingTimeMs,
     escalate,
+    isMerged,
+    mergedAt: pr.mergedAt ?? undefined,
     additions: pr.additions,
     deletions: pr.deletions,
     changedFiles: pr.changedFiles,
@@ -362,6 +366,7 @@ export function transformDashboard(res: GqlDashboardResponse): {
   if (res.teamPrs) {
     for (const pr of res.teamPrs.nodes) addNode(pr);
   }
+  for (const pr of res.recentlyMerged.nodes) addNode(pr);
 
   const prs = Array.from(byId.values()).map((pr) =>
     transformPR(pr, viewerLogin, requestedIds)

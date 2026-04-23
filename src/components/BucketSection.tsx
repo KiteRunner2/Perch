@@ -24,8 +24,13 @@ export function BucketSection({
   const collapsed = collapsedBuckets.has(bucket.id);
   const empty = bucket.items.length === 0;
 
-  // Don't render the catch-all buckets unless they have items.
-  if ((bucket.id === 'other' || bucket.id === 'team') && empty) return null;
+  // Don't render the catch-all / historical buckets unless they have items.
+  if (
+    (bucket.id === 'other' || bucket.id === 'team' || bucket.id === 'merged') &&
+    empty
+  ) {
+    return null;
+  }
 
   return (
     <section>
@@ -169,5 +174,7 @@ export const EMPTY_TEXT: Record<string, string> = {
   blocked: 'No blockers. Clear runway.',
   inreview: 'Nothing in review.',
   stale: 'Nothing aging. You keep a tidy queue.',
+  team: '',
+  merged: 'Nothing merged in the last 7 days.',
   other: '',
 };

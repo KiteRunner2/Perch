@@ -102,6 +102,9 @@ match wins):
 6. **Team** — broader-scope PRs where you have no direct relation (only
    populates in Team scope).
 7. **Other** — rare; shown only when non-empty.
+8. **Recently merged** — PRs you authored or reviewed that merged in
+   the last 7 days. Historical, not attention-demanding — collapsed by
+   default and tucked at the bottom.
 
 The logic lives in a pure function at [`src/lib/bucketing.ts`](src/lib/bucketing.ts).
 Tests are in [`src/lib/bucketing.test.ts`](src/lib/bucketing.test.ts).

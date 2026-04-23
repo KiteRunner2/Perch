@@ -10,9 +10,11 @@ function makeGqlPR(overrides: Partial<GqlPullRequest> = {}): GqlPullRequest {
     title: 'Example',
     url: 'https://github.com/example/repo/pull/1',
     isDraft: false,
+    state: 'OPEN',
     mergeable: 'MERGEABLE',
     updatedAt: now,
     createdAt: now,
+    mergedAt: null,
     additions: 0,
     deletions: 0,
     changedFiles: 0,
@@ -39,6 +41,7 @@ function makeResponse(prs: GqlPullRequest[]): GqlDashboardResponse {
       pullRequests: { nodes: prs },
     },
     reviewRequested: { nodes: [] },
+    recentlyMerged: { nodes: [] },
     rateLimit: { remaining: 5000, resetAt: new Date().toISOString() },
   };
 }
@@ -103,6 +106,28 @@ describe('transformDashboard', () => {
     expect(tl[1]!.body).toBe('Please fix the migration');
   });
 
+  it('flags merged PRs and preserves mergedAt', () => {
+    const mergedPR = makeGqlPR({
+      id: 'MERGED',
+      state: 'MERGED',
+      mergedAt: '2026-04-22T10:00:00Z',
+    });
+    const res = {
+      viewer: {
+        login: 'me',
+        avatarUrl: '',
+        pullRequests: { nodes: [] },
+      },
+      reviewRequested: { nodes: [] },
+      recentlyMerged: { nodes: [mergedPR] },
+      rateLimit: { remaining: 5000, resetAt: new Date().toISOString() },
+    };
+    const out = transformDashboard(res);
+    expect(out.prs).toHaveLength(1);
+    expect(out.prs[0]!.isMerged).toBe(true);
+    expect(out.prs[0]!.mergedAt).toBe('2026-04-22T10:00:00Z');
+  });
+
   it('surfaces inline review comments even when the review body is empty', () => {
     const pr = makeGqlPR({
       createdAt: '2026-04-20T10:00:00Z',
@@ -157,6 +182,7 @@ describe('transformDashboard', () => {
       },
       reviewRequested: { nodes: [pr] },
       teamPrs: { nodes: [pr] },
+      recentlyMerged: { nodes: [pr] },
       rateLimit: { remaining: 5000, resetAt: new Date().toISOString() },
     };
     const out = transformDashboard(res);

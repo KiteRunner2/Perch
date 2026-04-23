@@ -139,9 +139,16 @@ identifiers — use the `.mono` and `.num` classes defined in
   without checking their inline comments too.
 - **Query cost is cumulative.** Each PR fragment currently pulls
   ~reviews(20) × comments(10) + issueComments(20) + 10 labels + 10
-  review requests + 5 assignees. Three top-level search queries
-  multiply that. Before adding more nested connections, think about
-  the rate-limit budget.
+  review requests + 5 assignees. Four top-level search queries
+  (viewer.pullRequests, reviewRequested, teamPrs when Team scope is
+  on, and recentlyMerged) multiply that. Before adding more nested
+  connections, think about the rate-limit budget.
+- **Merged vs open PRs.** `viewer.pullRequests` and `reviewRequested`
+  only return OPEN PRs. Merged PRs arrive via the separate
+  `recentlyMerged` search. They short-circuit bucketing (first rule
+  in `bucketOf`) so they never get evaluated against open-PR rules
+  like "blocked" or "ready". If you add new bucket rules, remember
+  `isMerged` wins before anything else.
 - **Vite's `define` globals need a matching `declare const` in
   `src/types/env.d.ts`.** Don't forget to add Vite client types
   reference (`/// <reference types="vite/client" />`) if you introduce

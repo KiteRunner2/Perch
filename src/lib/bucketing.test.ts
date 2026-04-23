@@ -26,6 +26,7 @@ function makePR(overrides: Partial<DashboardPR> = {}): DashboardPR {
     reviewers: [],
     waitingTimeMs: 60 * 60 * 1000,
     escalate: false,
+    isMerged: false,
     additions: 0,
     deletions: 0,
     changedFiles: 0,
@@ -162,6 +163,17 @@ describe('bucketOf', () => {
     expect(bucketOf(pr)).toBe('team');
   });
 
+  it('routes merged PRs to the merged bucket regardless of other signals', () => {
+    const pr = makePR({
+      isMerged: true,
+      viewerIsAuthor: true,
+      // Would normally be Blocked (changes requested, failing CI).
+      approvalState: 'changes',
+      ciStatus: 'failure',
+    });
+    expect(bucketOf(pr)).toBe('merged');
+  });
+
   it('priority: waiting-on-me wins over blocked for a shared-author scenario', () => {
     // Viewer is author AND a requested reviewer (rare, but possible via GH team add).
     // Spec says: waiting-on-me is checked first, but only if not author.
@@ -204,6 +216,7 @@ describe('bucketize', () => {
       'stale',
       'team',
       'other',
+      'merged',
     ]);
     expect(buckets[0]!.items.map((p) => p.id)).toEqual(['A']);
     expect(buckets[1]!.items.map((p) => p.id)).toEqual(['B']);

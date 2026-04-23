@@ -34,7 +34,9 @@ export const useUIStore = create<UIState>((set) => ({
   settingsOpen: false,
   helpOpen: false,
   searchQuery: '',
-  collapsedBuckets: new Set<string>(),
+  // Start with "Recently merged" folded since it's historical and not
+  // the attention-first signal.
+  collapsedBuckets: new Set<string>(['merged']),
   setToken: (token) => {
     if (token) storage.setToken(token);
     else storage.clearToken();

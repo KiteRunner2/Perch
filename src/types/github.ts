@@ -17,6 +17,8 @@ export type StatusState =
 
 export type MergeableState = 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN';
 
+export type PullRequestState = 'OPEN' | 'CLOSED' | 'MERGED';
+
 export interface GqlUser {
   login: string;
   avatarUrl?: string;
@@ -77,9 +79,11 @@ export interface GqlPullRequest {
   title: string;
   url: string;
   isDraft: boolean;
+  state: PullRequestState;
   mergeable: MergeableState;
   updatedAt: string;
   createdAt: string;
+  mergedAt: string | null;
   additions: number;
   deletions: number;
   changedFiles: number;
@@ -102,5 +106,6 @@ export interface GqlDashboardResponse {
   reviewRequested: { nodes: GqlPullRequest[] };
   /** Present only when the @include(if: $includeTeam) branch is selected. */
   teamPrs?: { nodes: GqlPullRequest[] };
+  recentlyMerged: { nodes: GqlPullRequest[] };
   rateLimit: { remaining: number; resetAt: string };
 }

@@ -25,6 +25,15 @@ items into "shipped" with the commit SHA.
       also fixed dropping empty-body COMMENTED reviews that had
       inline-only feedback (`22e1a1d`)
 - [x] ROADMAP + CLAUDE.md onboarding docs (`45def94`)
+- [x] Real GitHub avatars for row reviewers with breathing-room
+      spacing (`a6579d2`)
+- [x] Row indicators live next to the title instead of pinned to the
+      far right on wide screens (`d13ec78`)
+- [x] Hover tooltip on the approval chip with reviewer-by-reviewer
+      breakdown (`ae63b83`)
+- [x] Real viewer avatar in the sidebar card (`9b164d9`)
+- [x] "Recently merged" bucket — last 7 days of PRs you authored or
+      reviewed, collapsed by default at the bottom
 
 ## Up next
 
