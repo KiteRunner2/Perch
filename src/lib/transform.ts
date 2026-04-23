@@ -250,6 +250,7 @@ export function transformPR(
     deletions: pr.deletions,
     changedFiles: pr.changedFiles,
     commitCount: pr.commits.totalCount,
+    commentCount: pr.totalCommentsCount ?? 0,
     timeline: buildTimeline(pr, author),
   };
 }

@@ -87,6 +87,8 @@ export interface DashboardPR {
   deletions: number;
   changedFiles: number;
   commitCount: number;
+  /** Total conversation — issue comments + review thread comments. */
+  commentCount: number;
   /** Opened + reviews + comments, sorted by time ascending. */
   timeline: TimelineEvent[];
 }

@@ -192,6 +192,29 @@ export function PRRow({ pr, focused, isNew, onSelect, onOpen }: PRRowProps) {
         </Tooltip>
         <CIStatusChip state={pr.ciStatus} compact />
         <AvatarStack users={pr.reviewers} max={3} size={18} />
+        {pr.commentCount > 0 && (
+          <Tooltip
+            content={
+              <div>
+                <div style={{ fontWeight: 600, color: 'var(--fg-0)' }}>
+                  {pr.commentCount}{' '}
+                  {pr.commentCount === 1 ? 'comment' : 'comments'}
+                </div>
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: 'var(--fg-2)',
+                    marginTop: 4,
+                  }}
+                >
+                  Click the row to read the full thread.
+                </div>
+              </div>
+            }
+          >
+            <CommentChip count={pr.commentCount} />
+          </Tooltip>
+        )}
       </div>
 
       {/* Escalation + time pinned to the far right via margin-left: auto. */}
@@ -330,6 +353,39 @@ function ReviewerLine({ reviewer }: { reviewer: DashboardReviewer }) {
       <span style={{ flex: 1 }} />
       <span style={{ color: meta.color }}>{meta.label}</span>
     </div>
+  );
+}
+
+function CommentChip({ count }: { count: number }) {
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+        height: 20,
+        padding: '0 7px',
+        borderRadius: 4,
+        border: '1px solid var(--line-2)',
+        background: 'var(--bg-2)',
+        color: 'var(--fg-2)',
+        fontSize: 11,
+        fontWeight: 500,
+        fontFamily: 'var(--font-mono)',
+        fontVariantNumeric: 'tabular-nums',
+      }}
+    >
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+        <path
+          d="M2 3h6v4H5l-2 2V7H2z"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinejoin="round"
+          fill="none"
+        />
+      </svg>
+      {count}
+    </span>
   );
 }
 

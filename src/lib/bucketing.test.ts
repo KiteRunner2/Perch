@@ -31,6 +31,7 @@ function makePR(overrides: Partial<DashboardPR> = {}): DashboardPR {
     deletions: 0,
     changedFiles: 0,
     commitCount: 1,
+    commentCount: 0,
     timeline: [],
   };
   return { ...base, ...overrides };
