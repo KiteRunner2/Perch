@@ -2,6 +2,8 @@ import { RefreshCw, Search, Settings as SettingsIcon, Sun, Moon } from 'lucide-r
 import type { ChangeEvent, KeyboardEvent } from 'react';
 import { useUIStore } from '../store';
 import { Kbd } from './primitives';
+import { UpdateAvailableChip } from './UpdateAvailableChip';
+import { useVersionCheck } from '../hooks/useVersionCheck';
 import type { Theme } from '../lib/storage';
 
 interface HeaderProps {
@@ -29,6 +31,8 @@ export function Header({
   const scope = useUIStore((s) => s.scope);
   const setScope = useUIStore((s) => s.setScope);
   const orgs = useUIStore((s) => s.orgs);
+
+  const versionCheck = useVersionCheck();
 
   function toggleTheme() {
     const next: Theme = theme === 'dark' ? 'light' : 'dark';
@@ -150,6 +154,10 @@ export function Header({
       )}
 
       <span style={{ flex: 1 }} />
+
+      {versionCheck.hasUpdate && versionCheck.latest && (
+        <UpdateAvailableChip latestShortSha={versionCheck.latest.shortSha} />
+      )}
 
       {/* Refresh status */}
       <div

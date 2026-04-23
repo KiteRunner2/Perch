@@ -40,7 +40,28 @@ function tryGit<T>(fn: () => T): T | null {
 const buildInfo = readBuildInfo();
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    {
+      // Emit /version.json so the running app can poll it and prompt the
+      // user to reload when the deployed SHA differs from the bundled one.
+      name: 'perch-emit-version-manifest',
+      apply: 'build',
+      generateBundle() {
+        this.emitFile({
+          type: 'asset',
+          fileName: 'version.json',
+          source: JSON.stringify({
+            sha: buildInfo.sha,
+            shortSha: buildInfo.shortSha,
+            branch: buildInfo.branch,
+            builtAt: buildInfo.builtAt,
+          }),
+        });
+      },
+    },
+  ],
   define: {
     __APP_VERSION__: JSON.stringify(buildInfo),
   },
