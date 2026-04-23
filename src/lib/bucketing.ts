@@ -2,15 +2,6 @@ import type { Bucket, BucketId, DashboardPR } from '../types/dashboard';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
-/** Has the viewer directly interacted with this PR (author, requested, reviewed)? */
-function viewerInvolved(pr: DashboardPR): boolean {
-  return (
-    pr.viewerIsAuthor ||
-    pr.viewerIsRequestedReviewer ||
-    pr.viewerReviewState !== 'none'
-  );
-}
-
 /**
  * Assign a bucket to a PR. Rules are evaluated in priority order;
  * first match wins. See instructions.md for the spec.
@@ -41,23 +32,19 @@ export function bucketOf(pr: DashboardPR): BucketId {
       return 'ready';
     }
 
-    // 4. In review: any viewer-authored PR that isn't blocked or ready.
+    // 4. In review: freshly-authored PR that isn't blocked or ready.
     if (pr.waitingTimeMs < SEVEN_DAYS_MS) {
       return 'inreview';
     }
-  }
 
-  // 5. Stale: viewer-involved PR not updated in 7+ days.
-  if (viewerInvolved(pr) && pr.waitingTimeMs >= SEVEN_DAYS_MS) {
+    // 5. Stale: my own authored PR aging in my queue.
     return 'stale';
   }
 
-  // 6. Team: broader-scope PRs where viewer has no direct relation.
-  if (!viewerInvolved(pr)) {
-    return 'team';
-  }
-
-  return 'other';
+  // 6. Team: any non-authored PR that fell through. Covers teammate PRs
+  //    the viewer hasn't touched AND ones the viewer already reviewed
+  //    (approved / requested changes / commented).
+  return 'team';
 }
 
 export interface BucketPlan {

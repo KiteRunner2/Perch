@@ -110,7 +110,7 @@ describe('bucketOf', () => {
     expect(bucketOf(pr)).toBe('inreview');
   });
 
-  it('marks viewer-involved old PR as stale', () => {
+  it('marks own old authored PR as stale', () => {
     const pr = makePR({
       viewerIsAuthor: true,
       waitingTimeMs: 10 * 24 * 60 * 60 * 1000,
@@ -119,7 +119,7 @@ describe('bucketOf', () => {
     expect(bucketOf(pr)).toBe('stale');
   });
 
-  it('team PRs (viewer not involved) go to team bucket regardless of age', () => {
+  it('team PRs (viewer uninvolved) go to team bucket', () => {
     const pr = makePR({
       viewerIsAuthor: false,
       viewerIsRequestedReviewer: false,
@@ -135,6 +135,24 @@ describe('bucketOf', () => {
       viewerIsRequestedReviewer: false,
       viewerReviewState: 'none',
       waitingTimeMs: 14 * 24 * 60 * 60 * 1000,
+    });
+    expect(bucketOf(pr)).toBe('team');
+  });
+
+  it('teammate PR the viewer already approved still buckets as team', () => {
+    const pr = makePR({
+      viewerIsAuthor: false,
+      viewerIsRequestedReviewer: true,
+      viewerReviewState: 'approved',
+    });
+    expect(bucketOf(pr)).toBe('team');
+  });
+
+  it('teammate PR the viewer only commented on buckets as team', () => {
+    const pr = makePR({
+      viewerIsAuthor: false,
+      viewerIsRequestedReviewer: false,
+      viewerReviewState: 'commented',
     });
     expect(bucketOf(pr)).toBe('team');
   });
