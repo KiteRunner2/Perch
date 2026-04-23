@@ -106,6 +106,7 @@ export interface GqlDashboardResponse {
   reviewRequested: { nodes: GqlPullRequest[] };
   /** Present only when the @include(if: $includeTeam) branch is selected. */
   teamPrs?: { nodes: GqlPullRequest[] };
-  recentlyMerged: { nodes: GqlPullRequest[] };
+  mergedAuthored: { nodes: GqlPullRequest[] };
+  mergedReviewed: { nodes: GqlPullRequest[] };
   rateLimit: { remaining: number; resetAt: string };
 }

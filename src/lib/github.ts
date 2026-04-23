@@ -9,7 +9,8 @@ export const DASHBOARD_QUERY = /* GraphQL */ `
     $searchQuery: String!
     $teamSearchQuery: String!
     $includeTeam: Boolean!
-    $mergedSearchQuery: String!
+    $mergedAuthoredQuery: String!
+    $mergedReviewedQuery: String!
   ) {
     viewer {
       login
@@ -29,7 +30,12 @@ export const DASHBOARD_QUERY = /* GraphQL */ `
         ... on PullRequest { ...PRFields }
       }
     }
-    recentlyMerged: search(query: $mergedSearchQuery, type: ISSUE, first: 30) {
+    mergedAuthored: search(query: $mergedAuthoredQuery, type: ISSUE, first: 30) {
+      nodes {
+        ... on PullRequest { ...PRFields }
+      }
+    }
+    mergedReviewed: search(query: $mergedReviewedQuery, type: ISSUE, first: 30) {
       nodes {
         ... on PullRequest { ...PRFields }
       }
@@ -121,16 +127,26 @@ export const SEARCH_QUERY = 'is:open is:pr review-requested:@me archived:false';
 /** Rolling window for the "Recently merged" bucket, in days. */
 export const MERGED_WINDOW_DAYS = 7;
 
+function mergedThresholdIso(windowDays: number): string {
+  const threshold = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
+  return threshold.toISOString().slice(0, 10); // YYYY-MM-DD
+}
+
 /**
- * Build the "recently merged" search query, scoped to PRs the viewer
- * either authored or reviewed, within the rolling window.
+ * Two "recently merged" queries instead of one `(author:@me OR
+ * reviewed-by:@me)` — GitHub's search `OR` is unreliable when mixed
+ * with other qualifiers, so we split and dedupe client-side.
  */
-export function buildMergedSearchQuery(
+export function buildMergedAuthoredQuery(
   windowDays: number = MERGED_WINDOW_DAYS
 ): string {
-  const threshold = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
-  const iso = threshold.toISOString().slice(0, 10); // YYYY-MM-DD
-  return `is:pr is:merged archived:false merged:>${iso} (author:@me OR reviewed-by:@me)`;
+  return `is:pr is:merged archived:false author:@me merged:>${mergedThresholdIso(windowDays)}`;
+}
+
+export function buildMergedReviewedQuery(
+  windowDays: number = MERGED_WINDOW_DAYS
+): string {
+  return `is:pr is:merged archived:false reviewed-by:@me merged:>${mergedThresholdIso(windowDays)}`;
 }
 
 export function createClient(token: string): GraphQLClient {
@@ -178,6 +194,7 @@ export async function fetchDashboard(
     // server-side but the variable is still validated as non-null String.
     teamSearchQuery: teamSearchQuery || 'is:open is:pr',
     includeTeam,
-    mergedSearchQuery: buildMergedSearchQuery(),
+    mergedAuthoredQuery: buildMergedAuthoredQuery(),
+    mergedReviewedQuery: buildMergedReviewedQuery(),
   });
 }

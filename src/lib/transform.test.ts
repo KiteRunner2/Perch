@@ -41,7 +41,8 @@ function makeResponse(prs: GqlPullRequest[]): GqlDashboardResponse {
       pullRequests: { nodes: prs },
     },
     reviewRequested: { nodes: [] },
-    recentlyMerged: { nodes: [] },
+    mergedAuthored: { nodes: [] },
+    mergedReviewed: { nodes: [] },
     rateLimit: { remaining: 5000, resetAt: new Date().toISOString() },
   };
 }
@@ -119,13 +120,35 @@ describe('transformDashboard', () => {
         pullRequests: { nodes: [] },
       },
       reviewRequested: { nodes: [] },
-      recentlyMerged: { nodes: [mergedPR] },
+      mergedAuthored: { nodes: [] },
+      mergedReviewed: { nodes: [mergedPR] },
       rateLimit: { remaining: 5000, resetAt: new Date().toISOString() },
     };
     const out = transformDashboard(res);
     expect(out.prs).toHaveLength(1);
     expect(out.prs[0]!.isMerged).toBe(true);
     expect(out.prs[0]!.mergedAt).toBe('2026-04-22T10:00:00Z');
+  });
+
+  it('dedupes a PR that appears in both mergedAuthored and mergedReviewed', () => {
+    const pr = makeGqlPR({
+      id: 'DOUBLE',
+      state: 'MERGED',
+      mergedAt: '2026-04-22T10:00:00Z',
+    });
+    const res = {
+      viewer: {
+        login: 'me',
+        avatarUrl: '',
+        pullRequests: { nodes: [] },
+      },
+      reviewRequested: { nodes: [] },
+      mergedAuthored: { nodes: [pr] },
+      mergedReviewed: { nodes: [pr] },
+      rateLimit: { remaining: 5000, resetAt: new Date().toISOString() },
+    };
+    const out = transformDashboard(res);
+    expect(out.prs).toHaveLength(1);
   });
 
   it('surfaces inline review comments even when the review body is empty', () => {
@@ -182,7 +205,8 @@ describe('transformDashboard', () => {
       },
       reviewRequested: { nodes: [pr] },
       teamPrs: { nodes: [pr] },
-      recentlyMerged: { nodes: [pr] },
+      mergedAuthored: { nodes: [pr] },
+      mergedReviewed: { nodes: [pr] },
       rateLimit: { remaining: 5000, resetAt: new Date().toISOString() },
     };
     const out = transformDashboard(res);
