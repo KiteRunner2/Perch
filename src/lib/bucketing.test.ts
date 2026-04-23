@@ -110,18 +110,33 @@ describe('bucketOf', () => {
     expect(bucketOf(pr)).toBe('inreview');
   });
 
-  it('marks stale when older than 7 days and no other rule matches', () => {
+  it('marks viewer-involved old PR as stale', () => {
     const pr = makePR({
+      viewerIsAuthor: true,
       waitingTimeMs: 10 * 24 * 60 * 60 * 1000,
+      updatedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
     });
     expect(bucketOf(pr)).toBe('stale');
   });
 
-  it('falls through to other when nothing matches', () => {
+  it('team PRs (viewer not involved) go to team bucket regardless of age', () => {
     const pr = makePR({
+      viewerIsAuthor: false,
+      viewerIsRequestedReviewer: false,
+      viewerReviewState: 'none',
       waitingTimeMs: 60 * 60 * 1000,
     });
-    expect(bucketOf(pr)).toBe('other');
+    expect(bucketOf(pr)).toBe('team');
+  });
+
+  it('old team PR still buckets as team, not stale', () => {
+    const pr = makePR({
+      viewerIsAuthor: false,
+      viewerIsRequestedReviewer: false,
+      viewerReviewState: 'none',
+      waitingTimeMs: 14 * 24 * 60 * 60 * 1000,
+    });
+    expect(bucketOf(pr)).toBe('team');
   });
 
   it('priority: waiting-on-me wins over blocked for a shared-author scenario', () => {
@@ -164,6 +179,7 @@ describe('bucketize', () => {
       'blocked',
       'inreview',
       'stale',
+      'team',
       'other',
     ]);
     expect(buckets[0]!.items.map((p) => p.id)).toEqual(['A']);

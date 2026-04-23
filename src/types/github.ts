@@ -77,5 +77,7 @@ export interface GqlDashboardResponse {
     pullRequests: { nodes: GqlPullRequest[] };
   };
   reviewRequested: { nodes: GqlPullRequest[] };
+  /** Present only when the @include(if: $includeTeam) branch is selected. */
+  teamPrs?: { nodes: GqlPullRequest[] };
   rateLimit: { remaining: number; resetAt: string };
 }

@@ -1,7 +1,10 @@
 const TOKEN_KEY = 'perch.token';
 const THEME_KEY = 'perch.theme';
+const SCOPE_KEY = 'perch.scope';
+const ORGS_KEY = 'perch.orgs';
 
 export type Theme = 'dark' | 'light';
+export type Scope = 'inbox' | 'all';
 
 export const storage = {
   getToken(): string | null {
@@ -23,6 +26,28 @@ export const storage = {
   },
   setTheme(theme: Theme): void {
     localStorage.setItem(THEME_KEY, theme);
+  },
+  getScope(): Scope {
+    return localStorage.getItem(SCOPE_KEY) === 'all' ? 'all' : 'inbox';
+  },
+  setScope(scope: Scope): void {
+    localStorage.setItem(SCOPE_KEY, scope);
+  },
+  getOrgs(): string[] {
+    const raw = localStorage.getItem(ORGS_KEY);
+    if (!raw) return [];
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((s): s is string => typeof s === 'string');
+      }
+    } catch {
+      /* ignore malformed */
+    }
+    return [];
+  },
+  setOrgs(orgs: string[]): void {
+    localStorage.setItem(ORGS_KEY, JSON.stringify(orgs));
   },
 };
 

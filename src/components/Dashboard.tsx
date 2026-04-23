@@ -18,13 +18,15 @@ import type { DashboardPR } from '../types/dashboard';
 export function Dashboard() {
   const token = useUIStore((s) => s.token);
   const setToken = useUIStore((s) => s.setToken);
+  const scope = useUIStore((s) => s.scope);
+  const orgs = useUIStore((s) => s.orgs);
   const selectedPRId = useUIStore((s) => s.selectedPRId);
   const setSelectedPRId = useUIStore((s) => s.setSelectedPRId);
   const detailOpen = useUIStore((s) => s.detailOpen);
   const setDetailOpen = useUIStore((s) => s.setDetailOpen);
   const searchQuery = useUIStore((s) => s.searchQuery);
 
-  const query = usePRs(token);
+  const query = usePRs({ token, scope, orgs });
 
   // Keep a ticking "Xs ago" label without refetching constantly.
   const [now, setNow] = useState(() => Date.now());

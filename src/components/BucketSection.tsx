@@ -24,8 +24,8 @@ export function BucketSection({
   const collapsed = collapsedBuckets.has(bucket.id);
   const empty = bucket.items.length === 0;
 
-  // Don't render the "other" bucket unless it has items.
-  if (bucket.id === 'other' && empty) return null;
+  // Don't render the catch-all buckets unless they have items.
+  if ((bucket.id === 'other' || bucket.id === 'team') && empty) return null;
 
   return (
     <section>

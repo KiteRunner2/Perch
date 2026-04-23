@@ -26,6 +26,9 @@ export function Header({
   const setSettingsOpen = useUIStore((s) => s.setSettingsOpen);
   const theme = useUIStore((s) => s.theme);
   const setTheme = useUIStore((s) => s.setTheme);
+  const scope = useUIStore((s) => s.scope);
+  const setScope = useUIStore((s) => s.setScope);
+  const orgs = useUIStore((s) => s.orgs);
 
   function toggleTheme() {
     const next: Theme = theme === 'dark' ? 'light' : 'dark';
@@ -113,6 +116,38 @@ export function Header({
         />
         <Kbd>/</Kbd>
       </label>
+
+      {orgs.length > 0 && (
+        <div
+          role="tablist"
+          aria-label="Scope"
+          style={{
+            display: 'flex',
+            gap: 2,
+            padding: 2,
+            background: 'var(--bg-2)',
+            border: '1px solid var(--line-1)',
+            borderRadius: 6,
+            height: 26,
+            alignItems: 'center',
+          }}
+        >
+          <ScopeBtn
+            active={scope === 'inbox'}
+            onClick={() => setScope('inbox')}
+            title="Your PRs + review-requested"
+          >
+            Inbox
+          </ScopeBtn>
+          <ScopeBtn
+            active={scope === 'all'}
+            onClick={() => setScope('all')}
+            title={`All open PRs in ${orgs.join(', ')}`}
+          >
+            Team
+          </ScopeBtn>
+        </div>
+      )}
 
       <span style={{ flex: 1 }} />
 
@@ -229,6 +264,40 @@ function IconButton({
         alignItems: 'center',
         justifyContent: 'center',
         opacity: disabled ? 0.6 : 1,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function ScopeBtn({
+  children,
+  active,
+  onClick,
+  title,
+}: {
+  children: React.ReactNode;
+  active: boolean;
+  onClick: () => void;
+  title?: string;
+}) {
+  return (
+    <button
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      title={title}
+      style={{
+        height: 20,
+        padding: '0 10px',
+        border: 'none',
+        borderRadius: 4,
+        background: active ? 'var(--bg-4)' : 'transparent',
+        color: active ? 'var(--fg-0)' : 'var(--fg-2)',
+        fontSize: 11.5,
+        fontWeight: active ? 500 : 400,
+        cursor: 'pointer',
       }}
     >
       {children}

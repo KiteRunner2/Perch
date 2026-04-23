@@ -2,6 +2,15 @@ import type { Bucket, BucketId, DashboardPR } from '../types/dashboard';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
+/** Has the viewer directly interacted with this PR (author, requested, reviewed)? */
+function viewerInvolved(pr: DashboardPR): boolean {
+  return (
+    pr.viewerIsAuthor ||
+    pr.viewerIsRequestedReviewer ||
+    pr.viewerReviewState !== 'none'
+  );
+}
+
 /**
  * Assign a bucket to a PR. Rules are evaluated in priority order;
  * first match wins. See instructions.md for the spec.
@@ -33,16 +42,19 @@ export function bucketOf(pr: DashboardPR): BucketId {
     }
 
     // 4. In review: any viewer-authored PR that isn't blocked or ready.
-    //    Covers active review requests, pending reviews, approvals that are
-    //    gated by draft/merge conflicts, and freshly opened PRs alike.
     if (pr.waitingTimeMs < SEVEN_DAYS_MS) {
       return 'inreview';
     }
   }
 
-  // 5. Stale: reached here, not updated in 7+ days.
-  if (pr.waitingTimeMs >= SEVEN_DAYS_MS) {
+  // 5. Stale: viewer-involved PR not updated in 7+ days.
+  if (viewerInvolved(pr) && pr.waitingTimeMs >= SEVEN_DAYS_MS) {
     return 'stale';
+  }
+
+  // 6. Team: broader-scope PRs where viewer has no direct relation.
+  if (!viewerInvolved(pr)) {
+    return 'team';
   }
 
   return 'other';
@@ -60,6 +72,7 @@ export const BUCKET_PLAN: BucketPlan[] = [
   { id: 'blocked', title: 'Blocked', color: 'var(--bucket-block)' },
   { id: 'inreview', title: 'In review', color: 'var(--bucket-review)' },
   { id: 'stale', title: 'Stale', color: 'var(--bucket-stale)' },
+  { id: 'team', title: 'Team', color: 'var(--info)' },
   { id: 'other', title: 'Other', color: 'var(--fg-3)' },
 ];
 
@@ -69,7 +82,8 @@ const BUCKET_ORDER: Record<BucketId, number> = {
   blocked: 2,
   inreview: 3,
   stale: 4,
-  other: 5,
+  team: 5,
+  other: 6,
 };
 
 function sortPRs(a: DashboardPR, b: DashboardPR): number {
@@ -88,7 +102,6 @@ export function bucketize(prs: DashboardPR[]): Bucket[] {
     groups.get(id)!.push(pr);
   }
 
-  // Sort within each bucket and assemble result.
   const out: Bucket[] = [];
   for (const plan of BUCKET_PLAN) {
     const items = groups.get(plan.id)!;
@@ -112,5 +125,6 @@ function bucketMeta(id: BucketId, items: DashboardPR[]): string | undefined {
   }
   if (id === 'ready' && items.length > 0) return 'Safe to merge';
   if (id === 'stale' && items.length > 0) return '7+ days';
+  if (id === 'team' && items.length > 0) return 'From tracked orgs';
   return undefined;
 }

@@ -68,6 +68,20 @@ icon in the header).
 | `?` | Toggle shortcut help |
 | `Esc` | Close drawer / modal |
 
+## Scope: Inbox vs Team
+
+By default Perch shows only the PRs you authored plus the PRs where you are
+a requested reviewer — the focused inbox.
+
+If you add one or more **tracked orgs** in Settings, a segmented control
+appears in the header:
+
+- **Inbox** — the default scope. Your PRs + review-requested.
+- **Team** — everything above, plus all open PRs in the tracked orgs.
+
+Team PRs you have no relation to land in a dedicated "Team" bucket so they
+don't dilute the signal of the action-oriented buckets.
+
 ## How bucketing works
 
 PRs are assigned to exactly one bucket, evaluated in priority order (first
@@ -80,8 +94,11 @@ match wins):
 3. **Ready to merge** — you're the author, at least one approval, CI green,
    `MERGEABLE`, not draft.
 4. **In review** — you're the author and the PR doesn't match the above.
-5. **Stale** — anything else not updated in 7+ days.
-6. **Other** — rare; shown only when non-empty.
+5. **Stale** — a PR you're involved with that hasn't been updated in 7+
+   days.
+6. **Team** — broader-scope PRs where you have no direct relation (only
+   populates in Team scope).
+7. **Other** — rare; shown only when non-empty.
 
 The logic lives in a pure function at [`src/lib/bucketing.ts`](src/lib/bucketing.ts).
 Tests are in [`src/lib/bucketing.test.ts`](src/lib/bucketing.test.ts).

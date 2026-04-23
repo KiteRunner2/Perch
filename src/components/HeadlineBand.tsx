@@ -59,6 +59,9 @@ export function HeadlineBand({ buckets }: Props) {
       <StatBlock label="Blocked" value={find('blocked')} tone="err" />
       <StatBlock label="In review" value={find('inreview')} tone="violet" />
       <StatBlock label="Stale" value={find('stale')} tone="neutral" />
+      {find('team') > 0 && (
+        <StatBlock label="Team" value={find('team')} tone="info" />
+      )}
     </div>
   );
 }

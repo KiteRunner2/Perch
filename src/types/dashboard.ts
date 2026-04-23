@@ -4,6 +4,7 @@ export type BucketId =
   | 'blocked'
   | 'inreview'
   | 'stale'
+  | 'team'
   | 'other';
 
 export type CIStatus = 'success' | 'failure' | 'pending' | 'none';

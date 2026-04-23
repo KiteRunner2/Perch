@@ -1,9 +1,11 @@
 import { create } from 'zustand';
-import { storage, type Theme } from './lib/storage';
+import { storage, type Scope, type Theme } from './lib/storage';
 
 interface UIState {
   token: string | null;
   theme: Theme;
+  scope: Scope;
+  orgs: string[];
   selectedPRId: string | null;
   detailOpen: boolean;
   settingsOpen: boolean;
@@ -12,6 +14,8 @@ interface UIState {
   collapsedBuckets: Set<string>;
   setToken: (token: string | null) => void;
   setTheme: (theme: Theme) => void;
+  setScope: (scope: Scope) => void;
+  setOrgs: (orgs: string[]) => void;
   setSelectedPRId: (id: string | null) => void;
   setDetailOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
@@ -23,6 +27,8 @@ interface UIState {
 export const useUIStore = create<UIState>((set) => ({
   token: storage.getToken(),
   theme: storage.getTheme(),
+  scope: storage.getScope(),
+  orgs: storage.getOrgs(),
   selectedPRId: null,
   detailOpen: false,
   settingsOpen: false,
@@ -38,6 +44,14 @@ export const useUIStore = create<UIState>((set) => ({
     storage.setTheme(theme);
     document.documentElement.dataset.theme = theme;
     set({ theme });
+  },
+  setScope: (scope) => {
+    storage.setScope(scope);
+    set({ scope });
+  },
+  setOrgs: (orgs) => {
+    storage.setOrgs(orgs);
+    set({ orgs });
   },
   setSelectedPRId: (id) => set({ selectedPRId: id }),
   setDetailOpen: (open) => set({ detailOpen: open }),

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { useUIStore } from '../store';
 import { redactToken } from '../lib/storage';
@@ -14,6 +15,24 @@ export function Settings({ rateLimit }: Props) {
   const setToken = useUIStore((s) => s.setToken);
   const theme = useUIStore((s) => s.theme);
   const setTheme = useUIStore((s) => s.setTheme);
+  const scope = useUIStore((s) => s.scope);
+  const setScope = useUIStore((s) => s.setScope);
+  const orgs = useUIStore((s) => s.orgs);
+  const setOrgs = useUIStore((s) => s.setOrgs);
+
+  const [orgsInput, setOrgsInput] = useState(orgs.join(', '));
+
+  useEffect(() => {
+    if (settingsOpen) setOrgsInput(orgs.join(', '));
+  }, [settingsOpen, orgs]);
+
+  function commitOrgs() {
+    const next = orgsInput
+      .split(/[,\s]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    setOrgs(next);
+  }
 
   if (!settingsOpen) return null;
 
@@ -89,6 +108,74 @@ export function Settings({ rateLimit }: Props) {
         </header>
 
         <div style={{ padding: '16px 18px 18px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+          <Group title="Scope">
+            <Row
+              label="View"
+              meta={
+                orgs.length === 0
+                  ? 'Add tracked orgs below to enable the broader view'
+                  : `Inbox = your PRs + review-requested. Team = all open PRs in tracked orgs.`
+              }
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  gap: 4,
+                  padding: 3,
+                  background: 'var(--bg-2)',
+                  border: '1px solid var(--line-1)',
+                  borderRadius: 6,
+                }}
+              >
+                <SegBtn
+                  active={scope === 'inbox' || orgs.length === 0}
+                  onClick={() => setScope('inbox')}
+                >
+                  Inbox
+                </SegBtn>
+                <SegBtn
+                  active={scope === 'all' && orgs.length > 0}
+                  onClick={() => {
+                    if (orgs.length > 0) setScope('all');
+                  }}
+                >
+                  Team
+                </SegBtn>
+              </div>
+            </Row>
+            <Row
+              label="Tracked orgs"
+              meta="Comma-separated logins, e.g. anthropics, vercel"
+            >
+              <input
+                value={orgsInput}
+                onChange={(e) => setOrgsInput(e.target.value)}
+                onBlur={commitOrgs}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    commitOrgs();
+                    (e.target as HTMLInputElement).blur();
+                  }
+                }}
+                placeholder="anthropics, vercel"
+                spellCheck={false}
+                autoComplete="off"
+                style={{
+                  width: 220,
+                  height: 28,
+                  padding: '0 10px',
+                  border: '1px solid var(--line-2)',
+                  background: 'var(--bg-1)',
+                  borderRadius: 5,
+                  color: 'var(--fg-0)',
+                  fontSize: 12,
+                  fontFamily: 'var(--font-mono)',
+                  outline: 'none',
+                }}
+              />
+            </Row>
+          </Group>
+
           <Group title="Appearance">
             <Row label="Theme" meta="Stored on this device">
               <div

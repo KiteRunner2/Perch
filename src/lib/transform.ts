@@ -231,8 +231,8 @@ export function transformPR(
 }
 
 /**
- * Transform the whole dashboard response. Dedupes PRs that appear in both
- * viewer.pullRequests and reviewRequested search results (by id).
+ * Transform the whole dashboard response. Dedupes PRs that appear across
+ * viewer.pullRequests, reviewRequested, and (optionally) teamPrs (by id).
  */
 export function transformDashboard(res: GqlDashboardResponse): {
   viewer: { login: string; avatarUrl: string };
@@ -248,6 +248,11 @@ export function transformDashboard(res: GqlDashboardResponse): {
   for (const pr of res.viewer.pullRequests.nodes) byId.set(pr.id, pr);
   for (const pr of res.reviewRequested.nodes) {
     if (pr && pr.id && !byId.has(pr.id)) byId.set(pr.id, pr);
+  }
+  if (res.teamPrs) {
+    for (const pr of res.teamPrs.nodes) {
+      if (pr && pr.id && !byId.has(pr.id)) byId.set(pr.id, pr);
+    }
   }
 
   const prs = Array.from(byId.values()).map((pr) =>
