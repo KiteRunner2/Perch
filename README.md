@@ -4,7 +4,8 @@ A personal GitHub pull-request inbox. Reorganizes your PRs by the question
 _"what needs my attention / what's blocked / what's ready?"_ instead of by
 repo. Single-user, client-only, no backend.
 
-Open tabs notice new deploys within 60 seconds and prompt for a reload.
+Open tabs notice new deploys within ~60 seconds and prompt the user to
+refresh, so you never stare at a stale build for long.
 
 ## Stack
 
