@@ -4,6 +4,7 @@ export type BucketId =
   | 'blocked'
   | 'inreview'
   | 'stale'
+  | 'needsreview'
   | 'team'
   | 'merged'
   | 'other';

@@ -101,10 +101,13 @@ match wins):
    above. Hidden when empty.
 5. **Stale** — a PR you're involved with that hasn't been updated in 7+
    days.
-6. **Team** — broader-scope PRs where you have no direct relation (only
+6. **Needs reviewers** — open team PRs with fewer than two reviewers
+   that you haven't been pulled into. Surfaces "I could pick this one
+   up" candidates. Hidden when empty; only populates in Team scope.
+7. **Team** — broader-scope PRs where you have no direct relation (only
    populates in Team scope).
-7. **Other** — rare; shown only when non-empty.
-8. **Recently merged** — PRs you authored or reviewed that merged in
+8. **Other** — rare; shown only when non-empty.
+9. **Recently merged** — PRs you authored or reviewed that merged in
    the last 7 days. Historical, not attention-demanding — collapsed by
    default and tucked at the bottom.
 

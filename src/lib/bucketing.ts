@@ -45,7 +45,19 @@ export function bucketOf(pr: DashboardPR): BucketId {
     return 'stale';
   }
 
-  // 6. Team: any non-authored PR that fell through. Covers teammate PRs
+  // 6. Needs reviewers: open team PR that's hungry for review attention
+  //    — fewer than 2 reviewers and the viewer hasn't been pulled in yet.
+  //    Surfaces "I could pick this one up" candidates from the team scope.
+  if (
+    !pr.isDraft &&
+    !pr.viewerIsRequestedReviewer &&
+    pr.viewerReviewState === 'none' &&
+    pr.reviewers.length < 2
+  ) {
+    return 'needsreview';
+  }
+
+  // 7. Team: any non-authored PR that fell through. Covers teammate PRs
   //    the viewer hasn't touched AND ones the viewer already reviewed
   //    (approved / requested changes / commented).
   return 'team';
@@ -63,6 +75,7 @@ export const BUCKET_PLAN: BucketPlan[] = [
   { id: 'blocked', title: 'Blocked', color: 'var(--bucket-block)' },
   { id: 'inreview', title: 'My PRs in review', color: 'var(--bucket-review)' },
   { id: 'stale', title: 'Stale', color: 'var(--bucket-stale)' },
+  { id: 'needsreview', title: 'Needs reviewers', color: 'var(--warn)' },
   { id: 'team', title: 'Team', color: 'var(--info)' },
   { id: 'other', title: 'Other', color: 'var(--fg-3)' },
   { id: 'merged', title: 'Recently merged', color: 'var(--violet)' },
@@ -74,9 +87,10 @@ const BUCKET_ORDER: Record<BucketId, number> = {
   blocked: 2,
   inreview: 3,
   stale: 4,
-  team: 5,
-  other: 6,
-  merged: 7,
+  needsreview: 5,
+  team: 6,
+  other: 7,
+  merged: 8,
 };
 
 function sortPRs(a: DashboardPR, b: DashboardPR): number {
@@ -124,6 +138,7 @@ function bucketMeta(id: BucketId, items: DashboardPR[]): string | undefined {
   }
   if (id === 'ready' && items.length > 0) return 'Safe to merge';
   if (id === 'stale' && items.length > 0) return '7+ days';
+  if (id === 'needsreview' && items.length > 0) return 'Light on reviewers';
   if (id === 'team' && items.length > 0) return 'From tracked orgs';
   if (id === 'merged' && items.length > 0) return 'Last 7 days';
   return undefined;

@@ -26,9 +26,9 @@ export function Sidebar({
     .slice(0, 8);
 
   const views = [
-    { id: 'inbox', name: 'Inbox', kbd: 'g i', count: prs.length, active: true },
-    { id: 'mine', name: 'My PRs', kbd: 'g m', count: mine.length },
-    { id: 'review', name: 'Reviewing', kbd: 'g r', count: reviewing.length },
+    { id: 'inbox', name: 'Inbox', count: prs.length, active: true },
+    { id: 'mine', name: 'My PRs', count: mine.length },
+    { id: 'review', name: 'Reviewing', count: reviewing.length },
   ];
 
   return (
@@ -139,7 +139,6 @@ export function Sidebar({
           key={v.id}
           active={v.active}
           name={v.name}
-          kbd={v.kbd}
           count={v.count}
           icon={
             v.id === 'inbox' ? (
@@ -206,14 +205,12 @@ function SidebarSection({
 
 function SidebarItem({
   name,
-  kbd,
   count,
   active,
   icon,
   mono,
 }: {
   name: string;
-  kbd?: string;
   count?: number;
   active?: boolean;
   icon: React.ReactNode;
@@ -230,7 +227,9 @@ function SidebarItem({
         borderRadius: 5,
         background: active ? 'var(--bg-3)' : 'transparent',
         color: active ? 'var(--fg-0)' : 'var(--fg-1)',
-        cursor: 'pointer',
+        // No cursor: pointer here — sidebar entries are read-only stats
+        // for now (only the inbox view exists). Don't hint at click
+        // affordance until they actually do something.
         position: 'relative',
       }}
     >
@@ -270,11 +269,6 @@ function SidebarItem({
       >
         {name}
       </span>
-      {kbd && (
-        <span className="mono" style={{ fontSize: 10, color: 'var(--fg-4)' }}>
-          {kbd}
-        </span>
-      )}
       {count != null && (
         <span
           className="mono num"

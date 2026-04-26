@@ -42,6 +42,13 @@ items into "shipped" with the commit SHA.
 - [x] Clicking a row opens the detail drawer
 - [x] Render comment bodies as proper Markdown (react-markdown +
       remark-gfm) so bot HTML wrappers don't leak into the timeline
+- [x] PR description in the drawer timeline (attached to the
+      "opened this PR" event)
+- [x] "Needs reviewers" bucket — surfaces team PRs with fewer than
+      two reviewers that the viewer hasn't touched, so you can pick
+      one up to review
+- [x] Sidebar Views/Repositories no longer show a click cursor for
+      entries that aren't actually wired up
 
 ## Up next
 

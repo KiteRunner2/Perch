@@ -126,11 +126,16 @@ describe('bucketOf', () => {
     expect(bucketOf(pr)).toBe('stale');
   });
 
-  it('team PRs (viewer uninvolved) go to team bucket', () => {
+  it('team PRs (viewer uninvolved, fully reviewed) go to team bucket', () => {
+    // Two reviewers so the needsreview rule doesn't claim it.
     const pr = makePR({
       viewerIsAuthor: false,
       viewerIsRequestedReviewer: false,
       viewerReviewState: 'none',
+      reviewers: [
+        { login: 'one', av: 'a', state: 'requested' },
+        { login: 'two', av: 'b', state: 'requested' },
+      ],
       waitingTimeMs: 60 * 60 * 1000,
     });
     expect(bucketOf(pr)).toBe('team');
@@ -141,6 +146,10 @@ describe('bucketOf', () => {
       viewerIsAuthor: false,
       viewerIsRequestedReviewer: false,
       viewerReviewState: 'none',
+      reviewers: [
+        { login: 'one', av: 'a', state: 'requested' },
+        { login: 'two', av: 'b', state: 'requested' },
+      ],
       waitingTimeMs: 14 * 24 * 60 * 60 * 1000,
     });
     expect(bucketOf(pr)).toBe('team');
@@ -162,6 +171,73 @@ describe('bucketOf', () => {
       viewerReviewState: 'commented',
     });
     expect(bucketOf(pr)).toBe('team');
+  });
+
+  describe('needsreview bucket', () => {
+    it('routes a non-draft PR with 0 reviewers and no viewer involvement', () => {
+      const pr = makePR({
+        viewerIsAuthor: false,
+        viewerIsRequestedReviewer: false,
+        viewerReviewState: 'none',
+        isDraft: false,
+        reviewers: [],
+      });
+      expect(bucketOf(pr)).toBe('needsreview');
+    });
+
+    it('routes a PR with exactly 1 reviewer', () => {
+      const pr = makePR({
+        viewerIsAuthor: false,
+        viewerIsRequestedReviewer: false,
+        viewerReviewState: 'none',
+        reviewers: [{ login: 'someone', av: 'a', state: 'requested' }],
+      });
+      expect(bucketOf(pr)).toBe('needsreview');
+    });
+
+    it('does not catch a PR with 2+ reviewers — those go to team', () => {
+      const pr = makePR({
+        viewerIsAuthor: false,
+        viewerIsRequestedReviewer: false,
+        viewerReviewState: 'none',
+        reviewers: [
+          { login: 'one', av: 'a', state: 'requested' },
+          { login: 'two', av: 'b', state: 'requested' },
+        ],
+      });
+      expect(bucketOf(pr)).toBe('team');
+    });
+
+    it('does not catch a draft PR', () => {
+      const pr = makePR({
+        viewerIsAuthor: false,
+        viewerIsRequestedReviewer: false,
+        viewerReviewState: 'none',
+        isDraft: true,
+        reviewers: [],
+      });
+      expect(bucketOf(pr)).toBe('team');
+    });
+
+    it('does not catch a PR the viewer was requested on (waiting wins)', () => {
+      const pr = makePR({
+        viewerIsAuthor: false,
+        viewerIsRequestedReviewer: true,
+        viewerReviewState: 'none',
+        reviewers: [],
+      });
+      expect(bucketOf(pr)).toBe('waiting');
+    });
+
+    it('does not catch a PR the viewer already reviewed', () => {
+      const pr = makePR({
+        viewerIsAuthor: false,
+        viewerIsRequestedReviewer: false,
+        viewerReviewState: 'commented',
+        reviewers: [],
+      });
+      expect(bucketOf(pr)).toBe('team');
+    });
   });
 
   it('routes merged PRs to the merged bucket regardless of other signals', () => {
@@ -215,6 +291,7 @@ describe('bucketize', () => {
       'blocked',
       'inreview',
       'stale',
+      'needsreview',
       'team',
       'other',
       'merged',
