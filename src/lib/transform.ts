@@ -20,12 +20,22 @@ import type {
 const AV_KEYS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 
 /**
+ * GitHub Apps post under a `<name>[bot]` login, but some review-bots
+ * (Cursor, Claude, etc.) use plain user accounts that don't follow
+ * the convention. Maintain an explicit allowlist for those, in
+ * addition to the `[bot]` suffix matcher. Compared case-insensitively.
+ */
+const KNOWN_BOT_LOGINS = new Set<string>(['cursor']);
+
+/**
  * GitHub Apps post reviews under a `<name>[bot]` login. They aren't
  * humans we should count toward an "N of M approved" ratio.
  */
 export function isBotLogin(login: string | null | undefined): boolean {
   if (!login) return false;
-  return login.endsWith('[bot]');
+  if (login.endsWith('[bot]')) return true;
+  if (KNOWN_BOT_LOGINS.has(login.toLowerCase())) return true;
+  return false;
 }
 
 /** Should this login count toward reviewer/approval tallies on this PR? */

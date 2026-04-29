@@ -141,6 +141,35 @@ describe('transformDashboard', () => {
     expect(out.reviewers.map((r) => r.login)).toEqual(['bob']);
   });
 
+  it('excludes known account-style bots like @cursor from reviewer tallies', () => {
+    const pr = makeGqlPR({
+      author: { login: 'alice' },
+      reviews: {
+        nodes: [
+          {
+            id: 'R1',
+            author: { login: 'cursor' }, // no [bot] suffix
+            state: 'COMMENTED',
+            submittedAt: '2026-04-25T10:00:00Z',
+            body: 'Cursor Bugbot review.',
+            comments: { nodes: [] },
+          },
+          {
+            id: 'R2',
+            author: { login: 'bob' },
+            state: 'APPROVED',
+            submittedAt: '2026-04-25T11:00:00Z',
+            body: '',
+            comments: { nodes: [] },
+          },
+        ],
+      },
+    });
+    const out = transformDashboard(makeResponse([pr])).prs[0]!;
+    expect(out.reviewers.map((r) => r.login)).toEqual(['bob']);
+    expect(out.reviewerCount).toBe(1);
+  });
+
   it('excludes [bot] reviewers from approval tallies but keeps them in the timeline', () => {
     const pr = makeGqlPR({
       author: { login: 'alice' },
