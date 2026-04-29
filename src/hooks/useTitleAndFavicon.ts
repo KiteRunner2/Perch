@@ -2,21 +2,40 @@ import { useEffect } from 'react';
 
 const BASE_TITLE = 'Perch — Inbox';
 
+export interface TabSignal {
+  /** Number of PRs in the Waiting-on-me bucket. */
+  waitingCount: number;
+  /**
+   * True when there's any new-since-last-visit activity (new PRs or
+   * new comments). Surfaces as a small dot when waitingCount is 0;
+   * subsumed by the count badge when there's a waiting count.
+   */
+  hasFresh: boolean;
+}
+
 /**
- * Keeps the browser tab title and favicon in sync with the
- * "Waiting on me" count.
+ * Keeps the browser tab title and favicon in sync with the dashboard
+ * state, so a pinned Perch tab can tell you at a glance:
+ *
+ *   waiting > 0           red badge + "(N) Perch — Inbox"
+ *   only fresh activity   blue dot   + "• Perch — Inbox"
+ *   nothing               plain favicon + "Perch — Inbox"
  */
-export function useTitleAndFavicon(waitingCount: number): void {
-  useEffect(() => {
-    document.title =
-      waitingCount > 0 ? `(${waitingCount}) ${BASE_TITLE}` : BASE_TITLE;
-  }, [waitingCount]);
+export function useTitleAndFavicon(signal: TabSignal): void {
+  const { waitingCount, hasFresh } = signal;
 
   useEffect(() => {
-    const url = makeFaviconDataUrl(waitingCount);
+    let prefix = '';
+    if (waitingCount > 0) prefix = `(${waitingCount}) `;
+    else if (hasFresh) prefix = '• ';
+    document.title = `${prefix}${BASE_TITLE}`;
+  }, [waitingCount, hasFresh]);
+
+  useEffect(() => {
+    const url = makeFaviconDataUrl(waitingCount, hasFresh);
     if (!url) return;
     setFavicon(url);
-  }, [waitingCount]);
+  }, [waitingCount, hasFresh]);
 }
 
 function setFavicon(href: string): void {
@@ -30,8 +49,13 @@ function setFavicon(href: string): void {
   link.href = href;
 }
 
-/** Render the Perch favicon into a PNG data URL with an optional count badge. */
-function makeFaviconDataUrl(count: number): string | null {
+/**
+ * Render the Perch favicon into a PNG data URL.
+ * Top-right corner gets either a red count badge (waiting count > 0)
+ * or a smaller blue freshness dot (hasFresh, no waiting count). When
+ * both are zero/false, draws the plain brand square.
+ */
+function makeFaviconDataUrl(count: number, hasFresh: boolean): string | null {
   if (typeof document === 'undefined') return null;
   const size = 64;
   const canvas = document.createElement('canvas');
@@ -56,7 +80,6 @@ function makeFaviconDataUrl(count: number): string | null {
   ctx.textBaseline = 'middle';
   ctx.fillText('⌥', size / 2, size / 2 + 2);
 
-  // Count badge (top-right) when there's something to flag.
   if (count > 0) {
     const label = count > 99 ? '99+' : String(count);
     const badgeR = 15;
@@ -79,6 +102,22 @@ function makeFaviconDataUrl(count: number): string | null {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(label, cx, cy + 1);
+  } else if (hasFresh) {
+    // Smaller blue dot with the same dark ring, no number — "FYI,
+    // something happened since you last looked."
+    const dotR = 10;
+    const cx = size - dotR - 4;
+    const cy = dotR + 4;
+
+    ctx.fillStyle = '#0b0d10';
+    ctx.beginPath();
+    ctx.arc(cx, cy, dotR + 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#6aa9ff';
+    ctx.beginPath();
+    ctx.arc(cx, cy, dotR, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   return canvas.toDataURL('image/png');

@@ -98,7 +98,8 @@ export function Dashboard() {
     () => buckets.find((b) => b.id === 'waiting')?.items.length ?? 0,
     [buckets]
   );
-  useTitleAndFavicon(waitingCount);
+  const hasFresh = newIds.size > 0 || newCommentDeltas.size > 0;
+  useTitleAndFavicon({ waitingCount, hasFresh });
 
   const totalOpen =
     query.data?.prs.filter((p) => !p.isMerged).length ?? 0;

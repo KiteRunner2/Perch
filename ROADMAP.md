@@ -54,6 +54,9 @@ items into "shipped" with the commit SHA.
       noting the number new since you last looked
 - [x] Auto-clear the comment delta when you open the drawer for that
       PR (advances the in-memory snapshot + persists immediately)
+- [x] Pinned-tab freshness signal: blue favicon dot + "• Perch — Inbox"
+      title prefix when there's new activity (new PRs / new comments)
+      but no PRs are waiting on you
 
 ## Up next
 
