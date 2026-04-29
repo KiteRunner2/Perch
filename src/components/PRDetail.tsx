@@ -596,13 +596,29 @@ function TimelineItem({ event }: { event: TimelineEvent }) {
           alignItems: 'center',
           gap: 6,
           fontSize: 12,
+          minWidth: 0,
         }}
       >
         <Avatar user={event.author} size={16} />
-        <span style={{ color: 'var(--fg-0)', fontWeight: 500 }}>
+        <span
+          style={{
+            color: 'var(--fg-0)',
+            fontWeight: 500,
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
+          }}
+        >
           @{event.author.login}
         </span>
-        <span style={{ color: 'var(--fg-2)' }}>{meta.verb}</span>
+        <span
+          style={{
+            color: 'var(--fg-2)',
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
+          }}
+        >
+          {meta.verb}
+        </span>
         {locationLabel && (
           <span
             className="mono"
@@ -613,6 +629,7 @@ function TimelineItem({ event }: { event: TimelineEvent }) {
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
               minWidth: 0,
+              flexShrink: 1,
             }}
             title={locationLabel}
           >
@@ -622,7 +639,12 @@ function TimelineItem({ event }: { event: TimelineEvent }) {
         <span style={{ flex: 1 }} />
         <span
           className="mono"
-          style={{ color: 'var(--fg-3)', fontSize: 10.5 }}
+          style={{
+            color: 'var(--fg-3)',
+            fontSize: 10.5,
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
+          }}
           title={event.at}
         >
           {when}
@@ -700,8 +722,9 @@ function CommentMarkdown({ body }: { body: string }) {
         blockquote: ({ children }) => (
           <blockquote
             style={{
+              // Reset browser default 40px indent — drawer's narrow.
               margin: '4px 0',
-              paddingLeft: 10,
+              padding: '2px 0 2px 10px',
               borderLeft: '3px solid var(--line-3)',
               color: 'var(--fg-2)',
             }}
