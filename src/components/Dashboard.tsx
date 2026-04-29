@@ -83,7 +83,16 @@ export function Dashboard() {
 
   const allIds = useMemo(() => filtered.map((p) => p.id), [filtered]);
   const newIds = useNewPRs(allIds);
-  const newCommentDeltas = useNewComments(filtered);
+  const { deltas: newCommentDeltas, markAsRead: markCommentsRead } =
+    useNewComments(filtered);
+
+  // When the drawer opens (or the selected PR changes while it's open),
+  // mark that PR's comments as read so the +N delta clears immediately.
+  useEffect(() => {
+    if (detailOpen && selectedPRId) {
+      markCommentsRead(selectedPRId);
+    }
+  }, [detailOpen, selectedPRId, markCommentsRead]);
 
   const waitingCount = useMemo(
     () => buckets.find((b) => b.id === 'waiting')?.items.length ?? 0,

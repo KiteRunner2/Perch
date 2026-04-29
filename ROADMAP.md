@@ -52,6 +52,8 @@ items into "shipped" with the commit SHA.
 - [x] "New comments since last visit" delta on the comment chip:
       chip turns accent blue and shows `+N`, with a tooltip line
       noting the number new since you last looked
+- [x] Auto-clear the comment delta when you open the drawer for that
+      PR (advances the in-memory snapshot + persists immediately)
 
 ## Up next
 
