@@ -20,6 +20,8 @@ function makeGqlPR(overrides: Partial<GqlPullRequest> = {}): GqlPullRequest {
     changedFiles: 0,
     totalCommentsCount: 0,
     body: '',
+    headRefName: 'feature/example',
+    baseRefName: 'main',
     repository: { nameWithOwner: 'example/repo', isArchived: false },
     author: { login: 'alice' },
     assignees: { nodes: [] },

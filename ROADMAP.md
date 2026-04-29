@@ -60,6 +60,8 @@ items into "shipped" with the commit SHA.
 - [x] Exclude the PR author and `[bot]` reviewers (Cursor Bugbot,
       Dependabot, etc.) from approval ratio + reviewer avatars; bots
       still surface in the drawer timeline
+- [x] Branch line in the drawer (`head → base`) with a one-click
+      copy button on the source branch name
 
 ## Up next
 

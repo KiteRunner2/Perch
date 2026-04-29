@@ -288,6 +288,8 @@ export function transformPR(
     changedFiles: pr.changedFiles,
     commitCount: pr.commits.totalCount,
     commentCount: pr.totalCommentsCount ?? 0,
+    headRefName: pr.headRefName,
+    baseRefName: pr.baseRefName,
     timeline: buildTimeline(pr, author),
   };
 }

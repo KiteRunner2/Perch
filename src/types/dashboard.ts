@@ -88,6 +88,10 @@ export interface DashboardPR {
   deletions: number;
   changedFiles: number;
   commitCount: number;
+  /** Source branch name (the one being merged in). */
+  headRefName: string;
+  /** Target branch name (usually main / master). */
+  baseRefName: string;
   /** Total conversation — issue comments + review thread comments. */
   commentCount: number;
   /** Opened + reviews + comments, sorted by time ascending. */

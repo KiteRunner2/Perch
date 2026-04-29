@@ -91,6 +91,10 @@ export interface GqlPullRequest {
   totalCommentsCount: number;
   /** Raw Markdown body of the PR description; may be empty string. */
   body: string;
+  /** Source branch (the branch being merged in). */
+  headRefName: string;
+  /** Target branch (usually `main`). */
+  baseRefName: string;
   repository: { nameWithOwner: string; isArchived: boolean };
   author: (GqlUser & { __typename?: string }) | null;
   assignees: { nodes: GqlUser[] };

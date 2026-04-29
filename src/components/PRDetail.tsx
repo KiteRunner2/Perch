@@ -1,4 +1,5 @@
-import { X, ExternalLink } from 'lucide-react';
+import { useState } from 'react';
+import { X, ExternalLink, Copy, Check } from 'lucide-react';
 import { formatDistanceToNowStrict } from 'date-fns';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -133,6 +134,8 @@ export function PRDetail({ pr, onClose }: Props) {
           </span>
           {pr.isDraft && <DraftChip />}
         </div>
+
+        <BranchLine head={pr.headRefName} base={pr.baseRefName} />
 
         {pr.labels.length > 0 && (
           <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -350,6 +353,96 @@ export function PRDetail({ pr, onClose }: Props) {
         </button>
       </div>
     </aside>
+  );
+}
+
+function BranchLine({ head, base }: { head: string; base: string }) {
+  return (
+    <div
+      style={{
+        marginTop: 8,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        fontSize: 11.5,
+        color: 'var(--fg-3)',
+        fontFamily: 'var(--font-mono)',
+        minWidth: 0,
+      }}
+    >
+      <CopyableBranch name={head} />
+      <span aria-hidden style={{ color: 'var(--fg-4)' }}>
+        →
+      </span>
+      <span
+        style={{
+          color: 'var(--fg-2)',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {base}
+      </span>
+    </div>
+  );
+}
+
+function CopyableBranch({ name }: { name: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(name);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1200);
+    } catch {
+      /* ignore — clipboard may be blocked in some contexts */
+    }
+  }
+
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        minWidth: 0,
+      }}
+    >
+      <span
+        style={{
+          color: 'var(--fg-1)',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+        title={name}
+      >
+        {name}
+      </span>
+      <button
+        type="button"
+        onClick={copy}
+        title={copied ? 'Copied' : `Copy ${name}`}
+        aria-label={copied ? 'Copied' : 'Copy branch name'}
+        style={{
+          width: 20,
+          height: 20,
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          border: 'none',
+          borderRadius: 4,
+          background: 'transparent',
+          color: copied ? 'var(--ok)' : 'var(--fg-3)',
+          cursor: 'pointer',
+          flexShrink: 0,
+        }}
+      >
+        {copied ? <Check size={11} /> : <Copy size={11} />}
+      </button>
+    </span>
   );
 }
 

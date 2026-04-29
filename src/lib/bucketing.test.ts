@@ -32,6 +32,8 @@ function makePR(overrides: Partial<DashboardPR> = {}): DashboardPR {
     changedFiles: 0,
     commitCount: 1,
     commentCount: 0,
+    headRefName: 'feature/example',
+    baseRefName: 'main',
     timeline: [],
   };
   return { ...base, ...overrides };
