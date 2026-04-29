@@ -49,6 +49,9 @@ items into "shipped" with the commit SHA.
       one up to review
 - [x] Sidebar Views/Repositories no longer show a click cursor for
       entries that aren't actually wired up
+- [x] "New comments since last visit" delta on the comment chip:
+      chip turns accent blue and shows `+N`, with a tooltip line
+      noting the number new since you last looked
 
 ## Up next
 

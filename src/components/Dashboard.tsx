@@ -4,6 +4,7 @@ import { useUIStore } from '../store';
 import { usePRs } from '../hooks/usePRs';
 import { useKeyboardNav } from '../hooks/useKeyboardNav';
 import { useNewPRs } from '../hooks/useNewPRs';
+import { useNewComments } from '../hooks/useNewComments';
 import { useTitleAndFavicon } from '../hooks/useTitleAndFavicon';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
@@ -82,6 +83,7 @@ export function Dashboard() {
 
   const allIds = useMemo(() => filtered.map((p) => p.id), [filtered]);
   const newIds = useNewPRs(allIds);
+  const newCommentDeltas = useNewComments(filtered);
 
   const waitingCount = useMemo(
     () => buckets.find((b) => b.id === 'waiting')?.items.length ?? 0,
@@ -184,6 +186,7 @@ export function Dashboard() {
                     bucket={bucket}
                     selectedPRId={selectedPRId}
                     newIds={newIds}
+                    newCommentDeltas={newCommentDeltas}
                     onSelect={(id) => {
                       setSelectedPRId(id);
                       setDetailOpen(true);

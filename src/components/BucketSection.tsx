@@ -6,6 +6,7 @@ interface Props {
   bucket: Bucket;
   selectedPRId: string | null;
   newIds: Set<string>;
+  newCommentDeltas: Map<string, number>;
   onSelect: (id: string) => void;
   onOpen: (url: string) => void;
   emptyText?: string;
@@ -15,6 +16,7 @@ export function BucketSection({
   bucket,
   selectedPRId,
   newIds,
+  newCommentDeltas,
   onSelect,
   onOpen,
   emptyText,
@@ -120,6 +122,7 @@ export function BucketSection({
                 pr={pr}
                 focused={selectedPRId === pr.id}
                 isNew={newIds.has(pr.id)}
+                newCommentCount={newCommentDeltas.get(pr.id) ?? 0}
                 onSelect={() => onSelect(pr.id)}
                 onOpen={() => onOpen(pr.url)}
               />

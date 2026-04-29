@@ -18,6 +18,8 @@ interface PRRowProps {
   focused: boolean;
   /** True when the PR wasn't present in the previous visit's snapshot. */
   isNew: boolean;
+  /** Comments added since the previous visit (0 = none new). */
+  newCommentCount: number;
   onSelect: () => void;
   /** Double-click opens the PR in a new tab. */
   onOpen: () => void;
@@ -43,7 +45,14 @@ function relTime(iso: string): string {
   }
 }
 
-export function PRRow({ pr, focused, isNew, onSelect, onOpen }: PRRowProps) {
+export function PRRow({
+  pr,
+  focused,
+  isNew,
+  newCommentCount,
+  onSelect,
+  onOpen,
+}: PRRowProps) {
   const bg = focused ? 'var(--bg-3)' : 'transparent';
 
   function handleClick(e: MouseEvent<HTMLDivElement>) {
@@ -200,6 +209,18 @@ export function PRRow({ pr, focused, isNew, onSelect, onOpen }: PRRowProps) {
                   {pr.commentCount}{' '}
                   {pr.commentCount === 1 ? 'comment' : 'comments'}
                 </div>
+                {newCommentCount > 0 && (
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: 'var(--accent)',
+                      marginTop: 4,
+                      fontWeight: 500,
+                    }}
+                  >
+                    {newCommentCount} new since your last visit
+                  </div>
+                )}
                 <div
                   style={{
                     fontSize: 11,
@@ -212,7 +233,10 @@ export function PRRow({ pr, focused, isNew, onSelect, onOpen }: PRRowProps) {
               </div>
             }
           >
-            <CommentChip count={pr.commentCount} />
+            <CommentChip
+              count={pr.commentCount}
+              delta={newCommentCount}
+            />
           </Tooltip>
         )}
       </div>
@@ -356,7 +380,8 @@ function ReviewerLine({ reviewer }: { reviewer: DashboardReviewer }) {
   );
 }
 
-function CommentChip({ count }: { count: number }) {
+function CommentChip({ count, delta }: { count: number; delta: number }) {
+  const hasNew = delta > 0;
   return (
     <span
       style={{
@@ -366,9 +391,11 @@ function CommentChip({ count }: { count: number }) {
         height: 20,
         padding: '0 7px',
         borderRadius: 4,
-        border: '1px solid var(--line-2)',
-        background: 'var(--bg-2)',
-        color: 'var(--fg-2)',
+        border: hasNew
+          ? '1px solid var(--accent)'
+          : '1px solid var(--line-2)',
+        background: hasNew ? 'var(--info-bg)' : 'var(--bg-2)',
+        color: hasNew ? 'var(--accent)' : 'var(--fg-2)',
         fontSize: 11,
         fontWeight: 500,
         fontFamily: 'var(--font-mono)',
@@ -385,6 +412,9 @@ function CommentChip({ count }: { count: number }) {
         />
       </svg>
       {count}
+      {hasNew && (
+        <span style={{ fontWeight: 600, marginLeft: 1 }}>+{delta}</span>
+      )}
     </span>
   );
 }
