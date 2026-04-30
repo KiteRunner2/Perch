@@ -158,6 +158,15 @@ identifiers — use the `.mono` and `.num` classes defined in
   in `bucketOf`) so they never get evaluated against open-PR rules
   like "blocked" or "ready". If you add new bucket rules, remember
   `isMerged` wins before anything else.
+- **Stale is a lens, not a primary bucket.** Most buckets are
+  mutually exclusive (first-match in `bucketOf`). Stale is the
+  exception: `bucketize` runs the primary classification, then
+  applies `isStale(pr)` independently and pushes any drifting PR
+  into the Stale bucket *as well as* its primary bucket. So a
+  teammate PR can show up in Team AND Stale. The `useKeyboardNav`
+  hook dedupes by PR id so j/k only stops on each PR once. If you
+  add new flatten-buckets-to-PRs code paths, dedupe similarly or
+  consume `query.data.prs` instead.
 - **Vite's `define` globals need a matching `declare const` in
   `src/types/env.d.ts`.** Don't forget to add Vite client types
   reference (`/// <reference types="vite/client" />`) if you introduce

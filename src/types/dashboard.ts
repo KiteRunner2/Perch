@@ -94,6 +94,19 @@ export interface DashboardPR {
   baseRefName: string;
   /** Total conversation — issue comments + review thread comments. */
   commentCount: number;
+  /**
+   * ISO timestamp of the latest commit on the source branch
+   * (`headRef.target.committedDate`). Null when the branch is gone.
+   * Drives the Stale lens.
+   */
+  lastCommitAt: string | null;
+  /**
+   * ISO timestamp of the most recent human activity on the PR — the
+   * latest of: issue comments, review submissions, inline review
+   * comments. Null when the PR has no comments or reviews yet (in
+   * which case the Stale lens falls back to `createdAt`).
+   */
+  lastCommentAt: string | null;
   /** Opened + reviews + comments, sorted by time ascending. */
   timeline: TimelineEvent[];
 }

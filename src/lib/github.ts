@@ -127,6 +127,11 @@ export const DASHBOARD_QUERY = /* GraphQL */ `
         }
       }
     }
+    headRef {
+      target {
+        ... on Commit { committedDate }
+      }
+    }
     labels(first: 10) {
       nodes { name color }
     }

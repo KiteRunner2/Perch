@@ -259,6 +259,29 @@ export function transformPR(
 
   const isMerged = pr.state === 'MERGED';
 
+  // Activity signals for the Stale lens.
+  // `lastCommitAt` = tip of the source branch (committedDate). Null when
+  // the branch is gone or the field came back null.
+  const lastCommitAt = pr.headRef?.target?.committedDate ?? null;
+  // `lastCommentAt` = max(issue comments, review submissions, inline
+  // review comments). Null when nothing has been said yet.
+  let lastCommentMs = 0;
+  let lastCommentAt: string | null = null;
+  const recordActivity = (ts: string | null | undefined): void => {
+    if (!ts) return;
+    const ms = Date.parse(ts);
+    if (!Number.isFinite(ms)) return;
+    if (ms > lastCommentMs) {
+      lastCommentMs = ms;
+      lastCommentAt = ts;
+    }
+  };
+  for (const c of pr.comments.nodes) recordActivity(c.createdAt);
+  for (const r of pr.reviews.nodes) {
+    recordActivity(r.submittedAt);
+    for (const ic of r.comments.nodes) recordActivity(ic.createdAt);
+  }
+
   return {
     id: pr.id,
     number: pr.number,
@@ -288,6 +311,8 @@ export function transformPR(
     changedFiles: pr.changedFiles,
     commitCount: pr.commits.totalCount,
     commentCount: pr.totalCommentsCount ?? 0,
+    lastCommitAt,
+    lastCommentAt,
     headRefName: pr.headRefName,
     baseRefName: pr.baseRefName,
     timeline: buildTimeline(pr, author),

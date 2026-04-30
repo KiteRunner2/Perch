@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { bucketOf, bucketize, isReadyToMerge } from './bucketing';
+import { bucketOf, bucketize, isReadyToMerge, isStale } from './bucketing';
 import type { DashboardPR } from '../types/dashboard';
 
 function makePR(overrides: Partial<DashboardPR> = {}): DashboardPR {
   const now = Date.now();
+  // Default to "fresh" activity — recent commit and recent comment —
+  // so most tests don't trip the Stale lens unless they opt in.
   const base: DashboardPR = {
     id: 'PR_1',
     number: 1,
@@ -32,11 +34,28 @@ function makePR(overrides: Partial<DashboardPR> = {}): DashboardPR {
     changedFiles: 0,
     commitCount: 1,
     commentCount: 0,
+    lastCommitAt: new Date(now - 60 * 60 * 1000).toISOString(),
+    lastCommentAt: new Date(now - 60 * 60 * 1000).toISOString(),
     headRefName: 'feature/example',
     baseRefName: 'main',
     timeline: [],
   };
   return { ...base, ...overrides };
+}
+
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+
+/** Helper: build a PR that should trip the Stale lens (no activity 60h). */
+function makeQuietPR(overrides: Partial<DashboardPR> = {}): DashboardPR {
+  const longAgo = new Date(Date.now() - 60 * HOUR_MS).toISOString();
+  return makePR({
+    createdAt: longAgo,
+    updatedAt: longAgo,
+    lastCommitAt: longAgo,
+    lastCommentAt: longAgo,
+    ...overrides,
+  });
 }
 
 describe('bucketOf', () => {
@@ -119,13 +138,14 @@ describe('bucketOf', () => {
     expect(bucketOf(pr)).toBe('inreview');
   });
 
-  it('marks own old authored PR as stale', () => {
-    const pr = makePR({
+  it('keeps an old authored PR in inreview as its primary bucket (stale is a separate lens now)', () => {
+    const pr = makeQuietPR({
       viewerIsAuthor: true,
-      waitingTimeMs: 10 * 24 * 60 * 60 * 1000,
-      updatedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+      waitingTimeMs: 10 * DAY_MS,
     });
-    expect(bucketOf(pr)).toBe('stale');
+    // Primary bucket is no longer 'stale' — that's an additive lens
+    // applied by `bucketize`, not the first-match chain in `bucketOf`.
+    expect(bucketOf(pr)).toBe('inreview');
   });
 
   it('team PRs (viewer uninvolved, fully reviewed) go to team bucket', () => {
@@ -143,8 +163,10 @@ describe('bucketOf', () => {
     expect(bucketOf(pr)).toBe('team');
   });
 
-  it('old team PR still buckets as team, not stale', () => {
-    const pr = makePR({
+  it('old team PR still has team as its primary bucket', () => {
+    // Under the new model the same PR will ALSO appear in Stale via
+    // bucketize, but its primary bucket is unchanged.
+    const pr = makeQuietPR({
       viewerIsAuthor: false,
       viewerIsRequestedReviewer: false,
       viewerReviewState: 'none',
@@ -152,7 +174,7 @@ describe('bucketOf', () => {
         { login: 'one', av: 'a', state: 'requested' },
         { login: 'two', av: 'b', state: 'requested' },
       ],
-      waitingTimeMs: 14 * 24 * 60 * 60 * 1000,
+      waitingTimeMs: 14 * DAY_MS,
     });
     expect(bucketOf(pr)).toBe('team');
   });
@@ -306,6 +328,91 @@ describe('isReadyToMerge', () => {
   });
 });
 
+describe('isStale', () => {
+  it('flags an open PR with no commits and no comments in the last 48h', () => {
+    expect(isStale(makeQuietPR())).toBe(true);
+  });
+
+  it('does not flag a PR with a recent commit even if comments are old', () => {
+    const longAgo = new Date(Date.now() - 60 * HOUR_MS).toISOString();
+    const pr = makePR({
+      createdAt: longAgo,
+      lastCommitAt: new Date(Date.now() - HOUR_MS).toISOString(),
+      lastCommentAt: longAgo,
+    });
+    expect(isStale(pr)).toBe(false);
+  });
+
+  it('does not flag a PR with a recent comment even if commits are old', () => {
+    const longAgo = new Date(Date.now() - 60 * HOUR_MS).toISOString();
+    const pr = makePR({
+      createdAt: longAgo,
+      lastCommitAt: longAgo,
+      lastCommentAt: new Date(Date.now() - HOUR_MS).toISOString(),
+    });
+    expect(isStale(pr)).toBe(false);
+  });
+
+  it('does not flag merged PRs', () => {
+    expect(isStale(makeQuietPR({ isMerged: true }))).toBe(false);
+  });
+
+  it('flags drafts when they meet the threshold', () => {
+    // Per spec: drafts that are also stalled are exactly the kind of
+    // thing the lens should surface.
+    expect(isStale(makeQuietPR({ isDraft: true }))).toBe(true);
+  });
+
+  it('falls back to createdAt when lastCommentAt is null (untouched PR)', () => {
+    const longAgo = new Date(Date.now() - 60 * HOUR_MS).toISOString();
+    const pr = makePR({
+      createdAt: longAgo,
+      lastCommitAt: longAgo,
+      lastCommentAt: null,
+    });
+    expect(isStale(pr)).toBe(true);
+  });
+
+  it('does not flag a freshly-opened PR even with null activity fields', () => {
+    const pr = makePR({
+      createdAt: new Date(Date.now() - HOUR_MS).toISOString(),
+      lastCommitAt: null,
+      lastCommentAt: null,
+    });
+    expect(isStale(pr)).toBe(false);
+  });
+});
+
+describe('bucketize stale lens', () => {
+  it('places a stale teammate PR in BOTH the team bucket and the stale lens', () => {
+    const drifting = makeQuietPR({
+      id: 'DRIFT',
+      viewerIsAuthor: false,
+      reviewers: [
+        { login: 'one', av: 'a', state: 'requested' },
+        { login: 'two', av: 'b', state: 'requested' },
+      ],
+    });
+    const buckets = bucketize([drifting]);
+    const team = buckets.find((b) => b.id === 'team')!;
+    const stale = buckets.find((b) => b.id === 'stale')!;
+    expect(team.items.map((p) => p.id)).toEqual(['DRIFT']);
+    expect(stale.items.map((p) => p.id)).toEqual(['DRIFT']);
+  });
+
+  it('does not duplicate stale PRs into the merged bucket', () => {
+    // Defensive: even an old-looking merged PR should never be in stale.
+    const m = makeQuietPR({
+      id: 'OLD_MERGE',
+      isMerged: true,
+      mergedAt: new Date(Date.now() - 60 * HOUR_MS).toISOString(),
+    });
+    const buckets = bucketize([m]);
+    expect(buckets.find((b) => b.id === 'stale')!.items).toHaveLength(0);
+    expect(buckets.find((b) => b.id === 'merged')!.items).toHaveLength(1);
+  });
+});
+
 describe('bucketize', () => {
   it('returns all buckets in canonical order with correct grouping', () => {
     const waiting = makePR({
@@ -332,10 +439,10 @@ describe('bucketize', () => {
       'ready',
       'blocked',
       'inreview',
-      'stale',
       'needsreview',
       'team',
       'other',
+      'stale',
       'merged',
     ]);
     expect(buckets[0]!.items.map((p) => p.id)).toEqual(['A']);

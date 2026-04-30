@@ -1,10 +1,18 @@
 import type { Bucket, BucketId, DashboardPR } from '../types/dashboard';
 
-const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+/**
+ * Threshold for the Stale lens: a PR is considered drifting when both
+ * activity signals (last commit and last comment) are older than this.
+ * 48 hours is intentionally aggressive — it's a "nobody touched this
+ * since the day before yesterday" signal.
+ */
+export const STALE_THRESHOLD_MS = 48 * 60 * 60 * 1000;
 
 /**
- * Assign a bucket to a PR. Rules are evaluated in priority order;
- * first match wins. See instructions.md for the spec.
+ * Assign a primary bucket to a PR. Rules are evaluated in priority order;
+ * first match wins. Stale is intentionally NOT in this chain — it's a
+ * secondary lens computed separately by `bucketize`, so a PR can appear
+ * in both Stale and its primary bucket.
  */
 export function bucketOf(pr: DashboardPR): BucketId {
   // 0. Merged: PR is done — always wins so it never gets evaluated
@@ -36,16 +44,12 @@ export function bucketOf(pr: DashboardPR): BucketId {
       return 'ready';
     }
 
-    // 4. In review: freshly-authored PR that isn't blocked or ready.
-    if (pr.waitingTimeMs < SEVEN_DAYS_MS) {
-      return 'inreview';
-    }
-
-    // 5. Stale: my own authored PR aging in my queue.
-    return 'stale';
+    // 4. In review: any other authored PR. Stale-as-primary used to
+    //    live here; it's now an independent lens.
+    return 'inreview';
   }
 
-  // 6. Needs reviewers: open team PR that's hungry for review attention
+  // 5. Needs reviewers: open team PR that's hungry for review attention
   //    — fewer than 2 reviewers and the viewer hasn't been pulled in yet.
   //    Surfaces "I could pick this one up" candidates from the team scope.
   if (
@@ -57,7 +61,7 @@ export function bucketOf(pr: DashboardPR): BucketId {
     return 'needsreview';
   }
 
-  // 7. Team: any non-authored PR that fell through. Covers teammate PRs
+  // 6. Team: any non-authored PR that fell through. Covers teammate PRs
   //    the viewer hasn't touched AND ones the viewer already reviewed
   //    (approved / requested changes / commented).
   return 'team';
@@ -77,21 +81,53 @@ export function isReadyToMerge(pr: DashboardPR): boolean {
   return pr.approvalCount >= 1;
 }
 
+/**
+ * Stale lens: open PR with no activity on either axis (commits, comments)
+ * within the threshold window. Authorship-agnostic. A PR can appear in
+ * Stale AND in its primary bucket — Stale is reflective ("this is
+ * drifting"), not a primary classification.
+ *
+ * Falls back to `createdAt` when the PR has no comments yet, so a brand-
+ * new PR that nobody looked at lands in Stale once it crosses the
+ * threshold.
+ */
+export function isStale(
+  pr: DashboardPR,
+  now: number = Date.now(),
+  thresholdMs: number = STALE_THRESHOLD_MS
+): boolean {
+  if (pr.isMerged) return false;
+  const cutoff = now - thresholdMs;
+  const createdMs = Date.parse(pr.createdAt);
+  const commitMs = pr.lastCommitAt ? Date.parse(pr.lastCommitAt) : createdMs;
+  const commentMs = pr.lastCommentAt
+    ? Date.parse(pr.lastCommentAt)
+    : createdMs;
+  // A PR opened less than `thresholdMs` ago is by definition not stale —
+  // even if commit/comment fallbacks would suggest otherwise (defensive).
+  if (Number.isFinite(createdMs) && createdMs >= cutoff) return false;
+  return commitMs < cutoff && commentMs < cutoff;
+}
+
 export interface BucketPlan {
   id: BucketId;
   title: string;
   color: string;
 }
 
+// Stale sits at the bottom (just above Recently merged) so the user
+// reads action-shaped buckets first, then sees Stale as a reflective
+// "by the way, these aren't moving" callout. PRs may also appear in
+// their primary bucket above.
 export const BUCKET_PLAN: BucketPlan[] = [
   { id: 'waiting', title: 'Waiting on me', color: 'var(--bucket-primary)' },
   { id: 'ready', title: 'Ready to merge', color: 'var(--bucket-merge)' },
   { id: 'blocked', title: 'Blocked', color: 'var(--bucket-block)' },
   { id: 'inreview', title: 'My PRs in review', color: 'var(--bucket-review)' },
-  { id: 'stale', title: 'Stale', color: 'var(--bucket-stale)' },
   { id: 'needsreview', title: 'Needs reviewers', color: 'var(--warn)' },
   { id: 'team', title: 'Team', color: 'var(--info)' },
   { id: 'other', title: 'Other', color: 'var(--fg-3)' },
+  { id: 'stale', title: 'Stale', color: 'var(--bucket-stale)' },
   { id: 'merged', title: 'Recently merged', color: 'var(--violet)' },
 ];
 
@@ -100,10 +136,10 @@ const BUCKET_ORDER: Record<BucketId, number> = {
   ready: 1,
   blocked: 2,
   inreview: 3,
-  stale: 4,
-  needsreview: 5,
-  team: 6,
-  other: 7,
+  needsreview: 4,
+  team: 5,
+  other: 6,
+  stale: 7,
   merged: 8,
 };
 
@@ -119,7 +155,12 @@ function sortPRs(a: DashboardPR, b: DashboardPR): number {
   return Date.parse(a.updatedAt) - Date.parse(b.updatedAt);
 }
 
-/** Bucket a list of PRs, returning an ordered array of buckets (empty ones kept). */
+/**
+ * Bucket a list of PRs, returning an ordered array of buckets (empty
+ * ones kept). Primary buckets are mutually exclusive (first-match via
+ * `bucketOf`); Stale is computed independently by `isStale` and may
+ * overlap with any primary bucket.
+ */
 export function bucketize(prs: DashboardPR[]): Bucket[] {
   const groups = new Map<BucketId, DashboardPR[]>();
   for (const plan of BUCKET_PLAN) groups.set(plan.id, []);
@@ -127,6 +168,13 @@ export function bucketize(prs: DashboardPR[]): Bucket[] {
   for (const pr of prs) {
     const id = bucketOf(pr);
     groups.get(id)!.push(pr);
+    // Stale is additive: a PR can appear here AND in its primary bucket.
+    // Skip merged (they short-circuit isStale anyway) and avoid stuffing
+    // a PR into Stale twice if `bucketOf` already returned 'stale' (it
+    // doesn't, currently — but defensive against future changes).
+    if (id !== 'stale' && id !== 'merged' && isStale(pr)) {
+      groups.get('stale')!.push(pr);
+    }
   }
 
   const out: Bucket[] = [];
@@ -151,7 +199,7 @@ function bucketMeta(id: BucketId, items: DashboardPR[]): string | undefined {
     return over24 > 0 ? `${over24} over 24h` : undefined;
   }
   if (id === 'ready' && items.length > 0) return 'Safe to merge';
-  if (id === 'stale' && items.length > 0) return '7+ days';
+  if (id === 'stale' && items.length > 0) return 'No activity 48h+';
   if (id === 'needsreview' && items.length > 0) return 'Light on reviewers';
   if (id === 'team' && items.length > 0) return 'From tracked orgs';
   if (id === 'merged' && items.length > 0) return 'Last 7 days';

@@ -32,6 +32,7 @@ function makeGqlPR(overrides: Partial<GqlPullRequest> = {}): GqlPullRequest {
       totalCount: 1,
       nodes: [{ commit: { statusCheckRollup: { state: 'SUCCESS' } } }],
     },
+    headRef: { target: { committedDate: now } },
     labels: { nodes: [] },
   };
   return { ...base, ...overrides };
@@ -326,6 +327,68 @@ describe('transformDashboard', () => {
     };
     const out = transformDashboard(res);
     expect(out.prs).toHaveLength(1);
+  });
+
+  it('derives lastCommitAt from headRef.target.committedDate', () => {
+    const committed = '2026-04-25T12:34:56Z';
+    const pr = makeGqlPR({
+      headRef: { target: { committedDate: committed } },
+    });
+    const out = transformDashboard(makeResponse([pr])).prs[0]!;
+    expect(out.lastCommitAt).toBe(committed);
+  });
+
+  it('returns null lastCommitAt when headRef is missing', () => {
+    const pr = makeGqlPR({ headRef: null });
+    const out = transformDashboard(makeResponse([pr])).prs[0]!;
+    expect(out.lastCommitAt).toBeNull();
+  });
+
+  it('derives lastCommentAt as the max across issue, review, and inline timestamps', () => {
+    const t1 = '2026-04-20T10:00:00Z'; // issue comment
+    const t2 = '2026-04-21T10:00:00Z'; // review submission
+    const t3 = '2026-04-22T10:00:00Z'; // inline review comment (most recent)
+    const pr = makeGqlPR({
+      comments: {
+        nodes: [
+          { id: 'C1', author: { login: 'a' }, body: 'hi', createdAt: t1 },
+        ],
+      },
+      reviews: {
+        nodes: [
+          {
+            id: 'R1',
+            author: { login: 'b' },
+            state: 'COMMENTED',
+            submittedAt: t2,
+            body: 'looking',
+            comments: {
+              nodes: [
+                {
+                  id: 'IC1',
+                  body: 'nit',
+                  path: 'src/x.ts',
+                  line: 1,
+                  originalLine: 1,
+                  createdAt: t3,
+                },
+              ],
+            },
+          },
+        ],
+      },
+    });
+    const out = transformDashboard(makeResponse([pr])).prs[0]!;
+    expect(out.lastCommentAt).toBe(t3);
+  });
+
+  it('returns null lastCommentAt for a PR with no comments or reviews', () => {
+    const pr = makeGqlPR({
+      comments: { nodes: [] },
+      reviews: { nodes: [] },
+    });
+    const out = transformDashboard(makeResponse([pr])).prs[0]!;
+    expect(out.lastCommentAt).toBeNull();
   });
 
   it('surfaces team-merged PRs the viewer never touched', () => {

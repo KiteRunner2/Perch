@@ -29,9 +29,18 @@ export function useKeyboardNav({ buckets, onRefresh }: Options): void {
   const collapsedBuckets = useUIStore((s) => s.collapsedBuckets);
 
   useEffect(() => {
-    const flatList: DashboardPR[] = buckets
-      .filter((b) => !collapsedBuckets.has(b.id))
-      .flatMap((b) => b.items);
+    // Stale is an additive lens — a PR can appear in Stale AND its
+    // primary bucket. j/k should only stop on a given PR once.
+    const seenIds = new Set<string>();
+    const flatList: DashboardPR[] = [];
+    for (const b of buckets) {
+      if (collapsedBuckets.has(b.id)) continue;
+      for (const pr of b.items) {
+        if (seenIds.has(pr.id)) continue;
+        seenIds.add(pr.id);
+        flatList.push(pr);
+      }
+    }
 
     // Initialize selection when possible
     if (!selectedPRId && flatList.length > 0) {

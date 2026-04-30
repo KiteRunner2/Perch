@@ -102,6 +102,14 @@ export interface GqlPullRequest {
   reviews: { nodes: GqlReview[] };
   comments: { nodes: GqlIssueComment[] };
   commits: { totalCount: number; nodes: GqlCommit[] };
+  /**
+   * Tip of the source branch. `target.committedDate` is the actual time
+   * of the most recent commit pushed to the PR — used by the Stale
+   * lens. May be null if the branch is missing (rare; deleted refs).
+   */
+  headRef?: {
+    target: { committedDate?: string | null } | null;
+  } | null;
   labels: { nodes: GqlLabel[] };
 }
 
