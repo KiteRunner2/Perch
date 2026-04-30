@@ -63,6 +63,20 @@ export function bucketOf(pr: DashboardPR): BucketId {
   return 'team';
 }
 
+/**
+ * "Ready to merge" predicate — open PR that is approved, green, mergeable,
+ * not draft. Independent of authorship so the header stat can reflect any
+ * PR in the list (yours or a teammate's) that's safe to ship.
+ */
+export function isReadyToMerge(pr: DashboardPR): boolean {
+  if (pr.isMerged) return false;
+  if (pr.isDraft) return false;
+  if (pr.approvalState === 'changes') return false;
+  if (pr.ciStatus !== 'success') return false;
+  if (pr.mergeable !== 'MERGEABLE') return false;
+  return pr.approvalCount >= 1;
+}
+
 export interface BucketPlan {
   id: BucketId;
   title: string;

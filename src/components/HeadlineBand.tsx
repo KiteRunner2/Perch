@@ -1,6 +1,7 @@
 import type { Bucket } from '../types/dashboard';
 import { TONE_STYLE } from './primitives';
 import type { LabelTone } from '../types/dashboard';
+import { isReadyToMerge } from '../lib/bucketing';
 
 interface Props {
   buckets: Bucket[];
@@ -11,6 +12,14 @@ export function HeadlineBand({ buckets }: Props) {
     buckets.find((b) => b.id === id)?.items.length ?? 0;
 
   const waiting = find('waiting');
+
+  // Count ready-to-merge across every bucket (not just `ready`, which is
+  // scoped to the viewer's own authored PRs). A teammate's approved + green
+  // PR sitting in Team should still bump this stat.
+  const readyToMerge = buckets.reduce(
+    (n, b) => n + b.items.filter(isReadyToMerge).length,
+    0
+  );
 
   return (
     <div
@@ -55,7 +64,7 @@ export function HeadlineBand({ buckets }: Props) {
         </div>
       </div>
 
-      <StatBlock label="Ready to merge" value={find('ready')} tone="ok" />
+      <StatBlock label="Ready to merge" value={readyToMerge} tone="ok" />
       <StatBlock label="Blocked" value={find('blocked')} tone="err" />
       <StatBlock label="In review" value={find('inreview')} tone="violet" />
       <StatBlock label="Stale" value={find('stale')} tone="neutral" />

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bucketOf, bucketize } from './bucketing';
+import { bucketOf, bucketize, isReadyToMerge } from './bucketing';
 import type { DashboardPR } from '../types/dashboard';
 
 function makePR(overrides: Partial<DashboardPR> = {}): DashboardPR {
@@ -263,6 +263,46 @@ describe('bucketOf', () => {
       approvalState: 'changes',
     });
     expect(bucketOf(pr)).toBe('blocked');
+  });
+});
+
+describe('isReadyToMerge', () => {
+  const readyBase = {
+    approvalCount: 2,
+    reviewerCount: 2,
+    approvalState: 'approved' as const,
+    ciStatus: 'success' as const,
+    mergeable: 'MERGEABLE' as const,
+    isDraft: false,
+  };
+
+  it('returns true for an approved + green + mergeable open PR regardless of authorship', () => {
+    expect(isReadyToMerge(makePR({ ...readyBase, viewerIsAuthor: true }))).toBe(
+      true
+    );
+    // Teammate PR — not in `ready` bucket, but still ready to merge.
+    expect(
+      isReadyToMerge(makePR({ ...readyBase, viewerIsAuthor: false }))
+    ).toBe(true);
+  });
+
+  it('returns false for draft, failing CI, changes requested, or merged PRs', () => {
+    expect(isReadyToMerge(makePR({ ...readyBase, isDraft: true }))).toBe(false);
+    expect(isReadyToMerge(makePR({ ...readyBase, ciStatus: 'failure' }))).toBe(
+      false
+    );
+    expect(
+      isReadyToMerge(makePR({ ...readyBase, approvalState: 'changes' }))
+    ).toBe(false);
+    expect(isReadyToMerge(makePR({ ...readyBase, isMerged: true }))).toBe(
+      false
+    );
+    expect(
+      isReadyToMerge(makePR({ ...readyBase, mergeable: 'CONFLICTING' }))
+    ).toBe(false);
+    expect(isReadyToMerge(makePR({ ...readyBase, approvalCount: 0 }))).toBe(
+      false
+    );
   });
 });
 
