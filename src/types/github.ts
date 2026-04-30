@@ -116,5 +116,7 @@ export interface GqlDashboardResponse {
   teamPrs?: { nodes: GqlPullRequest[] };
   mergedAuthored: { nodes: GqlPullRequest[] };
   mergedReviewed: { nodes: GqlPullRequest[] };
+  /** Present only when the @include(if: $includeTeam) branch is selected. */
+  mergedTeam?: { nodes: GqlPullRequest[] };
   rateLimit: { remaining: number; resetAt: string };
 }

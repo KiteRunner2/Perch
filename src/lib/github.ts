@@ -11,6 +11,7 @@ export const DASHBOARD_QUERY = /* GraphQL */ `
     $includeTeam: Boolean!
     $mergedAuthoredQuery: String!
     $mergedReviewedQuery: String!
+    $mergedTeamQuery: String!
   ) {
     viewer {
       login
@@ -36,6 +37,12 @@ export const DASHBOARD_QUERY = /* GraphQL */ `
       }
     }
     mergedReviewed: search(query: $mergedReviewedQuery, type: ISSUE, first: 30) {
+      nodes {
+        ... on PullRequest { ...PRFields }
+      }
+    }
+    mergedTeam: search(query: $mergedTeamQuery, type: ISSUE, first: 30)
+      @include(if: $includeTeam) {
       nodes {
         ... on PullRequest { ...PRFields }
       }
@@ -153,6 +160,24 @@ export function buildMergedReviewedQuery(
   return `is:pr is:merged archived:false reviewed-by:@me merged:>${mergedThresholdIso(windowDays)}`;
 }
 
+/**
+ * Team-scope merged search: anything merged in the tracked orgs in the
+ * window, regardless of whether the viewer authored or reviewed it.
+ * Returns an empty string when there are no orgs to scope to — callers
+ * should guard the @include flag on a non-empty value.
+ */
+export function buildMergedTeamQuery(
+  orgs: string[],
+  windowDays: number = MERGED_WINDOW_DAYS
+): string {
+  const cleaned = orgs
+    .map((o) => o.trim())
+    .filter(Boolean)
+    .map((o) => `org:${o}`);
+  if (cleaned.length === 0) return '';
+  return `is:pr is:merged archived:false ${cleaned.join(' ')} merged:>${mergedThresholdIso(windowDays)}`;
+}
+
 export function createClient(token: string): GraphQLClient {
   return new GraphQLClient(GITHUB_ENDPOINT, {
     headers: {
@@ -191,6 +216,7 @@ export async function fetchDashboard(
 ): Promise<GqlDashboardResponse> {
   const client = createClient(token);
   const teamSearchQuery = buildTeamSearchQuery(opts.orgs);
+  const mergedTeamQuery = buildMergedTeamQuery(opts.orgs);
   const includeTeam = opts.scope === 'all' && teamSearchQuery.length > 0;
   return client.request<GqlDashboardResponse>(DASHBOARD_QUERY, {
     searchQuery: SEARCH_QUERY,
@@ -200,5 +226,6 @@ export async function fetchDashboard(
     includeTeam,
     mergedAuthoredQuery: buildMergedAuthoredQuery(),
     mergedReviewedQuery: buildMergedReviewedQuery(),
+    mergedTeamQuery: mergedTeamQuery || 'is:pr is:merged',
   });
 }

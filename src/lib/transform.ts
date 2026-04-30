@@ -411,6 +411,9 @@ export function transformDashboard(res: GqlDashboardResponse): {
   }
   for (const pr of res.mergedAuthored.nodes) addNode(pr);
   for (const pr of res.mergedReviewed.nodes) addNode(pr);
+  if (res.mergedTeam) {
+    for (const pr of res.mergedTeam.nodes) addNode(pr);
+  }
 
   const prs = Array.from(byId.values()).map((pr) =>
     transformPR(pr, viewerLogin, requestedIds)

@@ -139,10 +139,11 @@ identifiers — use the `.mono` and `.num` classes defined in
   without checking their inline comments too.
 - **Query cost is cumulative.** Each PR fragment currently pulls
   ~reviews(20) × comments(10) + issueComments(20) + 10 labels + 10
-  review requests + 5 assignees. Four top-level search queries
-  (viewer.pullRequests, reviewRequested, teamPrs when Team scope is
-  on, and recentlyMerged) multiply that. Before adding more nested
-  connections, think about the rate-limit budget.
+  review requests + 5 assignees. Top-level search aliases
+  (viewer.pullRequests, reviewRequested, mergedAuthored,
+  mergedReviewed, plus teamPrs and mergedTeam when Team scope is on)
+  multiply that. Before adding more nested connections, think about
+  the rate-limit budget.
 - **Reviewer counts exclude the PR author and `[bot]` accounts.**
   `transform.ts` filters both out of `approvalCount` / `reviewerCount`
   / the `reviewers` array surfaced on each row. Bots still appear in
@@ -150,8 +151,10 @@ identifiers — use the `.mono` and `.num` classes defined in
   inflate "1/2 approved" style chips. See `countsAsReviewer` /
   `isBotLogin` in `src/lib/transform.ts`.
 - **Merged vs open PRs.** `viewer.pullRequests` and `reviewRequested`
-  only return OPEN PRs. Merged PRs arrive via the separate
-  `recentlyMerged` search. They short-circuit bucketing (first rule
+  only return OPEN PRs. Merged PRs arrive via three separate
+  searches: `mergedAuthored` (you), `mergedReviewed` (you reviewed),
+  and `mergedTeam` (anything in tracked orgs in the last 7d, only
+  when Team scope is on). They short-circuit bucketing (first rule
   in `bucketOf`) so they never get evaluated against open-PR rules
   like "blocked" or "ready". If you add new bucket rules, remember
   `isMerged` wins before anything else.

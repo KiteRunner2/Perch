@@ -321,9 +321,38 @@ describe('transformDashboard', () => {
       teamPrs: { nodes: [pr] },
       mergedAuthored: { nodes: [pr] },
       mergedReviewed: { nodes: [pr] },
+      mergedTeam: { nodes: [pr] },
       rateLimit: { remaining: 5000, resetAt: new Date().toISOString() },
     };
     const out = transformDashboard(res);
     expect(out.prs).toHaveLength(1);
+  });
+
+  it('surfaces team-merged PRs the viewer never touched', () => {
+    // PR merged by a teammate in a tracked org. Doesn't appear in
+    // mergedAuthored or mergedReviewed because the viewer wasn't
+    // involved — only in mergedTeam.
+    const teammateMerge = makeGqlPR({
+      id: 'TEAM_MERGED',
+      state: 'MERGED',
+      mergedAt: '2026-04-22T10:00:00Z',
+      author: { login: 'someone-else' },
+    });
+    const res: GqlDashboardResponse = {
+      viewer: {
+        login: 'me',
+        avatarUrl: '',
+        pullRequests: { nodes: [] },
+      },
+      reviewRequested: { nodes: [] },
+      mergedAuthored: { nodes: [] },
+      mergedReviewed: { nodes: [] },
+      mergedTeam: { nodes: [teammateMerge] },
+      rateLimit: { remaining: 5000, resetAt: new Date().toISOString() },
+    };
+    const out = transformDashboard(res);
+    expect(out.prs).toHaveLength(1);
+    expect(out.prs[0]!.id).toBe('TEAM_MERGED');
+    expect(out.prs[0]!.isMerged).toBe(true);
   });
 });
