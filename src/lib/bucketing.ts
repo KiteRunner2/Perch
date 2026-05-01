@@ -193,6 +193,29 @@ export function bucketize(prs: DashboardPR[]): Bucket[] {
   return out;
 }
 
+/**
+ * Flatten buckets into a single ordered, deduplicated PR list for
+ * keyboard nav and modal prev/next. Walks buckets in display order,
+ * skips collapsed ones, and dedupes by PR id so a PR that appears in
+ * both its primary bucket and the Stale lens only shows up once.
+ */
+export function flattenForNav(
+  buckets: Bucket[],
+  collapsed: ReadonlySet<string>
+): DashboardPR[] {
+  const seen = new Set<string>();
+  const out: DashboardPR[] = [];
+  for (const b of buckets) {
+    if (collapsed.has(b.id)) continue;
+    for (const pr of b.items) {
+      if (seen.has(pr.id)) continue;
+      seen.add(pr.id);
+      out.push(pr);
+    }
+  }
+  return out;
+}
+
 function bucketMeta(id: BucketId, items: DashboardPR[]): string | undefined {
   if (id === 'waiting') {
     const over24 = items.filter((p) => p.escalate).length;

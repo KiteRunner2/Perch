@@ -310,6 +310,53 @@ describe('transformDashboard', () => {
     expect(tl[1]!.line).toBe(42);
   });
 
+  it('marks inline comment side based on which line field is set', () => {
+    const pr = makeGqlPR({
+      reviews: {
+        nodes: [
+          {
+            id: 'R1',
+            author: { login: 'bob' },
+            state: 'COMMENTED',
+            submittedAt: '2026-04-25T11:00:00Z',
+            body: '',
+            comments: {
+              nodes: [
+                // New-side: `line` is set.
+                {
+                  id: 'C_NEW',
+                  body: 'on the addition',
+                  path: 'src/x.ts',
+                  line: 30,
+                  originalLine: null,
+                  createdAt: '2026-04-25T11:00:01Z',
+                },
+                // Old-side: only `originalLine` is set (rare; comment
+                // on a deleted line).
+                {
+                  id: 'C_OLD',
+                  body: 'on the deletion',
+                  path: 'src/x.ts',
+                  line: null as unknown as number,
+                  originalLine: 30,
+                  createdAt: '2026-04-25T11:00:02Z',
+                },
+              ],
+            },
+          },
+        ],
+      },
+    });
+    const tl = transformDashboard(makeResponse([pr])).prs[0]!.timeline.filter(
+      (e) => e.kind === 'inline-comment'
+    );
+    expect(tl).toHaveLength(2);
+    expect(tl[0]!.line).toBe(30);
+    expect(tl[0]!.side).toBe('new');
+    expect(tl[1]!.line).toBe(30);
+    expect(tl[1]!.side).toBe('old');
+  });
+
   it('dedupes a PR that appears in multiple result sets', () => {
     const pr = makeGqlPR({ id: 'SAME' });
     const res: GqlDashboardResponse = {

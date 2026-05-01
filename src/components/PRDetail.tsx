@@ -1,5 +1,12 @@
 import { useState } from 'react';
-import { X, ExternalLink, Copy, Check } from 'lucide-react';
+import {
+  X,
+  ExternalLink,
+  Copy,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react';
 import { formatDistanceToNowStrict } from 'date-fns';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -10,13 +17,44 @@ import {
   LabelPill,
   TONE_STYLE,
 } from './primitives';
+import { DiffTab } from './DiffTab';
 
 interface Props {
   pr: DashboardPR;
   onClose: () => void;
+  /** 0-based index of this PR in the nav list, or -1 if not present. */
+  navIndex: number;
+  /** Total PRs in the nav list (deduped, collapsed buckets excluded). */
+  navTotal: number;
+  /** Previous PR id, or null at the start of the list. */
+  prevId: string | null;
+  /** Next PR id, or null at the end of the list. */
+  nextId: string | null;
+  /** Switch the modal to a different PR without closing. */
+  onNavigate: (id: string) => void;
 }
 
-export function PRDetail({ pr, onClose }: Props) {
+type DrawerTab = 'timeline' | 'diff';
+
+// Centered modal layout (experimenting). Sized generously for Diff
+// readability — since the modal floats over the bucket list with a
+// dim backdrop, we don't need to leave horizontal room behind it.
+// Caps at 1100px wide / 92vh tall, scales down to 92vw / 92vh on
+// smaller monitors.
+const MODAL_WIDTH = 'min(1100px, 92vw)';
+const MODAL_HEIGHT = 'min(900px, 92vh)';
+
+export function PRDetail({
+  pr,
+  onClose,
+  navIndex,
+  navTotal,
+  prevId,
+  nextId,
+  onNavigate,
+}: Props) {
+  const [activeTab, setActiveTab] = useState<DrawerTab>('timeline');
+
   const mergeableTone =
     pr.mergeable === 'MERGEABLE'
       ? 'ok'
@@ -25,20 +63,40 @@ export function PRDetail({ pr, onClose }: Props) {
         : 'warn';
 
   return (
-    <aside
-      role="dialog"
-      aria-label={`Pull request ${pr.repoNameWithOwner} #${pr.number}`}
+    <div
+      // Backdrop. Click anywhere outside the panel to dismiss; Esc
+      // is still wired through useKeyboardNav.
+      onClick={onClose}
       style={{
-        width: 480,
-        height: '100%',
-        background: 'var(--bg-1)',
-        borderLeft: '1px solid var(--line-2)',
-        boxShadow: '-24px 0 60px rgba(0,0,0,0.3)',
+        position: 'fixed',
+        inset: 0,
+        zIndex: 50,
+        background: 'rgba(0, 0, 0, 0.35)',
         display: 'flex',
-        flexDirection: 'column',
-        flexShrink: 0,
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 24,
       }}
     >
+      <aside
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Pull request ${pr.repoNameWithOwner} #${pr.number}`}
+        // Stop clicks inside the panel from bubbling to the backdrop
+        // and triggering close.
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: MODAL_WIDTH,
+          height: MODAL_HEIGHT,
+          background: 'var(--bg-1)',
+          border: '1px solid var(--line-2)',
+          borderRadius: 10,
+          boxShadow: '0 32px 80px rgba(0, 0, 0, 0.45)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+      >
       <div
         style={{
           padding: '14px 18px',
@@ -56,6 +114,15 @@ export function PRDetail({ pr, onClose }: Props) {
           #{pr.number}
         </span>
         <span style={{ flex: 1 }} />
+        {navTotal > 1 && (
+          <NavControls
+            navIndex={navIndex}
+            navTotal={navTotal}
+            prevId={prevId}
+            nextId={nextId}
+            onNavigate={onNavigate}
+          />
+        )}
         <a
           href={pr.url}
           target="_blank"
@@ -234,16 +301,26 @@ export function PRDetail({ pr, onClose }: Props) {
         </div>
       </div>
 
-      <div
-        style={{
-          padding: '14px 18px',
-          overflow: 'auto',
-          flex: 1,
-        }}
-        className="scroll-zone"
-      >
-        <SectionLabel>Timeline</SectionLabel>
-        <Timeline events={pr.timeline} />
+      <TabStrip
+        activeTab={activeTab}
+        onChange={setActiveTab}
+        timelineCount={pr.timeline.length}
+        fileCount={pr.changedFiles}
+      />
+
+      {activeTab === 'diff' ? (
+        <DiffTab pr={pr} active={activeTab === 'diff'} />
+      ) : (
+        <div
+          style={{
+            padding: '14px 18px',
+            overflow: 'auto',
+            flex: 1,
+          }}
+          className="scroll-zone"
+        >
+          <SectionLabel>Timeline</SectionLabel>
+          <Timeline events={pr.timeline} />
 
         <div style={{ height: 20 }} />
 
@@ -303,7 +380,8 @@ export function PRDetail({ pr, onClose }: Props) {
           })}
         </div>
 
-      </div>
+        </div>
+      )}
 
       <div
         style={{
@@ -352,7 +430,8 @@ export function PRDetail({ pr, onClose }: Props) {
           Close
         </button>
       </div>
-    </aside>
+      </aside>
+    </div>
   );
 }
 
@@ -444,6 +523,177 @@ function CopyableBranch({ name }: { name: string }) {
         {copied ? <Check size={11} /> : <Copy size={11} />}
       </button>
     </span>
+  );
+}
+
+function NavControls({
+  navIndex,
+  navTotal,
+  prevId,
+  nextId,
+  onNavigate,
+}: {
+  navIndex: number;
+  navTotal: number;
+  prevId: string | null;
+  nextId: string | null;
+  onNavigate: (id: string) => void;
+}) {
+  // Counter is `index + 1 / total`. When the selected PR has fallen
+  // out of the nav list (rare — e.g. the bucket it was in just got
+  // collapsed, or filters changed), index is -1; show "—" instead of
+  // a misleading 0.
+  const label =
+    navIndex >= 0
+      ? `${navIndex + 1}/${navTotal}`
+      : `—/${navTotal}`;
+  const prevDisabled = !prevId;
+  const nextDisabled = !nextId;
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 2,
+        marginRight: 4,
+      }}
+    >
+      <button
+        onClick={() => prevId && onNavigate(prevId)}
+        disabled={prevDisabled}
+        title="Previous PR (k or ←)"
+        aria-label="Previous PR"
+        style={navBtnStyle(prevDisabled)}
+      >
+        <ChevronLeft size={14} />
+      </button>
+      <span
+        className="mono num"
+        style={{
+          fontSize: 11,
+          color: 'var(--fg-3)',
+          minWidth: 44,
+          textAlign: 'center',
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        {label}
+      </span>
+      <button
+        onClick={() => nextId && onNavigate(nextId)}
+        disabled={nextDisabled}
+        title="Next PR (j or →)"
+        aria-label="Next PR"
+        style={navBtnStyle(nextDisabled)}
+      >
+        <ChevronRight size={14} />
+      </button>
+    </span>
+  );
+}
+
+function navBtnStyle(disabled: boolean): React.CSSProperties {
+  return {
+    height: 24,
+    width: 24,
+    border: 'none',
+    borderRadius: 4,
+    background: 'transparent',
+    color: disabled ? 'var(--fg-4)' : 'var(--fg-2)',
+    cursor: disabled ? 'default' : 'pointer',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  };
+}
+
+function TabStrip({
+  activeTab,
+  onChange,
+  timelineCount,
+  fileCount,
+}: {
+  activeTab: DrawerTab;
+  onChange: (tab: DrawerTab) => void;
+  timelineCount: number;
+  fileCount: number;
+}) {
+  return (
+    <div
+      style={{
+        padding: '0 14px',
+        display: 'flex',
+        gap: 0,
+        borderBottom: '1px solid var(--line-2)',
+        background: 'var(--bg-1)',
+      }}
+    >
+      <TabButton
+        label="Timeline"
+        count={timelineCount}
+        active={activeTab === 'timeline'}
+        onClick={() => onChange('timeline')}
+      />
+      <TabButton
+        label="Diff"
+        count={fileCount}
+        active={activeTab === 'diff'}
+        onClick={() => onChange('diff')}
+      />
+    </div>
+  );
+}
+
+function TabButton({
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  label: string;
+  count: number | null;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        height: 36,
+        padding: '0 12px',
+        border: 'none',
+        background: 'transparent',
+        color: active ? 'var(--fg-0)' : 'var(--fg-2)',
+        fontSize: 12,
+        fontWeight: active ? 600 : 500,
+        cursor: 'pointer',
+        fontFamily: 'var(--font-sans)',
+        borderBottom: active
+          ? '2px solid var(--accent)'
+          : '2px solid transparent',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        marginBottom: -1,
+      }}
+    >
+      {label}
+      {count != null && (
+        <span
+          className="mono"
+          style={{
+            fontSize: 10,
+            color: active ? 'var(--fg-1)' : 'var(--fg-3)',
+            padding: '1px 5px',
+            borderRadius: 3,
+            background: active ? 'var(--bg-3)' : 'var(--bg-2)',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {count}
+        </span>
+      )}
+    </button>
   );
 }
 

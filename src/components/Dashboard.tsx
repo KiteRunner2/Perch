@@ -15,7 +15,7 @@ import { Settings } from './Settings';
 import { HelpOverlay } from './HelpOverlay';
 import { LoadingSkeleton } from './LoadingSkeleton';
 import { ErrorBanner } from './ErrorBanner';
-import { bucketize } from '../lib/bucketing';
+import { bucketize, flattenForNav } from '../lib/bucketing';
 import type { DashboardPR } from '../types/dashboard';
 
 export function Dashboard() {
@@ -65,6 +65,23 @@ export function Dashboard() {
     () => filtered.find((p) => p.id === selectedPRId) ?? null,
     [filtered, selectedPRId]
   );
+
+  // The same flat list `useKeyboardNav` walks for j/k. Drives the
+  // modal's prev/next chevrons + counter so they stay in lockstep
+  // with keyboard nav (and vice-versa).
+  const collapsedBuckets = useUIStore((s) => s.collapsedBuckets);
+  const navList = useMemo(
+    () => flattenForNav(buckets, collapsedBuckets),
+    [buckets, collapsedBuckets]
+  );
+  const navIndex = selectedPRId
+    ? navList.findIndex((p) => p.id === selectedPRId)
+    : -1;
+  const prevNavId = navIndex > 0 ? navList[navIndex - 1]!.id : null;
+  const nextNavId =
+    navIndex >= 0 && navIndex < navList.length - 1
+      ? navList[navIndex + 1]!.id
+      : null;
 
   // Reset selection if it falls out of the filtered set.
   useEffect(() => {
@@ -214,7 +231,15 @@ export function Dashboard() {
       </main>
 
       {detailOpen && selectedPR && (
-        <PRDetail pr={selectedPR} onClose={() => setDetailOpen(false)} />
+        <PRDetail
+          pr={selectedPR}
+          onClose={() => setDetailOpen(false)}
+          navIndex={navIndex}
+          navTotal={navList.length}
+          onNavigate={(id) => setSelectedPRId(id)}
+          prevId={prevNavId}
+          nextId={nextNavId}
+        />
       )}
 
       <Settings rateLimit={query.data?.rateLimit} />

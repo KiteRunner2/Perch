@@ -51,6 +51,13 @@ export interface TimelineEvent {
   path?: string;
   /** Diff line for inline-comment events. */
   line?: number;
+  /**
+   * Which side of the diff the inline comment was left on. `'new'`
+   * = the post-change side (most common); `'old'` = a comment on a
+   * deleted line. Drives the Diff tab anchoring so comments don't
+   * duplicate when both sides happen to share a line number.
+   */
+  side?: 'old' | 'new';
 }
 
 export interface DashboardPR {

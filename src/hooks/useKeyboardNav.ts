@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import type { Bucket, DashboardPR } from '../types/dashboard';
+import type { Bucket } from '../types/dashboard';
+import { flattenForNav } from '../lib/bucketing';
 import { useUIStore } from '../store';
 
 interface Options {
@@ -29,18 +30,7 @@ export function useKeyboardNav({ buckets, onRefresh }: Options): void {
   const collapsedBuckets = useUIStore((s) => s.collapsedBuckets);
 
   useEffect(() => {
-    // Stale is an additive lens — a PR can appear in Stale AND its
-    // primary bucket. j/k should only stop on a given PR once.
-    const seenIds = new Set<string>();
-    const flatList: DashboardPR[] = [];
-    for (const b of buckets) {
-      if (collapsedBuckets.has(b.id)) continue;
-      for (const pr of b.items) {
-        if (seenIds.has(pr.id)) continue;
-        seenIds.add(pr.id);
-        flatList.push(pr);
-      }
-    }
+    const flatList = flattenForNav(buckets, collapsedBuckets);
 
     // Initialize selection when possible
     if (!selectedPRId && flatList.length > 0) {
@@ -108,6 +98,30 @@ export function useKeyboardNav({ buckets, onRefresh }: Options): void {
           break;
         }
         case 'k': {
+          if (flatList.length === 0) return;
+          const i = currentIndex();
+          const prev = Math.max(0, i < 0 ? 0 : i - 1);
+          setSelectedPRId(flatList[prev]!.id);
+          e.preventDefault();
+          break;
+        }
+        // Arrow keys mirror j/k but feel more "modal-y" while the
+        // detail drawer is open. Only active when the modal is open
+        // so they don't interfere with browser/system focus rings
+        // during normal list browsing.
+        case 'ArrowDown':
+        case 'ArrowRight': {
+          if (!detailOpen) return;
+          if (flatList.length === 0) return;
+          const i = currentIndex();
+          const next = Math.min(flatList.length - 1, i < 0 ? 0 : i + 1);
+          setSelectedPRId(flatList[next]!.id);
+          e.preventDefault();
+          break;
+        }
+        case 'ArrowUp':
+        case 'ArrowLeft': {
+          if (!detailOpen) return;
           if (flatList.length === 0) return;
           const i = currentIndex();
           const prev = Math.max(0, i < 0 ? 0 : i - 1);

@@ -380,6 +380,21 @@ function buildTimeline(
     // who only left diff nits still shows up in the timeline.
     for (const c of r.comments.nodes) {
       if (!c.body || c.body.trim().length === 0) continue;
+      // GitHub's `line` is the new-side (head) line; `originalLine`
+      // is the old-side line. If `line` is non-null the comment was
+      // left on the right side of the diff; if only `originalLine`
+      // is set, it was on the left (deletion) side. We carry the
+      // distinction so the Diff tab can anchor without duplicating
+      // when both sides share a line number.
+      const newSideLine = c.line;
+      const oldSideLine = c.originalLine;
+      const side: 'new' | 'old' | undefined =
+        newSideLine != null
+          ? 'new'
+          : oldSideLine != null
+            ? 'old'
+            : undefined;
+      const line = newSideLine ?? oldSideLine ?? undefined;
       events.push({
         id: c.id,
         kind: 'inline-comment',
@@ -387,7 +402,8 @@ function buildTimeline(
         at: c.createdAt,
         body: c.body,
         path: c.path,
-        line: c.line ?? c.originalLine ?? undefined,
+        ...(line != null ? { line } : {}),
+        ...(side ? { side } : {}),
       });
     }
   }
