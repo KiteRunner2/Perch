@@ -204,6 +204,8 @@ export function PRDetail({
 
         <BranchLine head={pr.headRefName} base={pr.baseRefName} />
 
+        <PRUrlLine url={pr.url} />
+
         {pr.labels.length > 0 && (
           <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {pr.labels.map((l, i) => (
@@ -463,6 +465,72 @@ function BranchLine({ head, base }: { head: string; base: string }) {
       >
         {base}
       </span>
+    </div>
+  );
+}
+
+function PRUrlLine({ url }: { url: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1200);
+    } catch {
+      /* ignore — clipboard may be blocked in some contexts */
+    }
+  }
+
+  return (
+    <div
+      style={{
+        marginTop: 4,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        fontSize: 11.5,
+        fontFamily: 'var(--font-mono)',
+        minWidth: 0,
+      }}
+    >
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        title={url}
+        style={{
+          color: 'var(--accent)',
+          textDecoration: 'none',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          minWidth: 0,
+        }}
+      >
+        {url.replace(/^https?:\/\//, '')}
+      </a>
+      <button
+        type="button"
+        onClick={copy}
+        title={copied ? 'Copied' : 'Copy URL'}
+        aria-label={copied ? 'Copied' : 'Copy PR URL'}
+        style={{
+          width: 20,
+          height: 20,
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          border: 'none',
+          borderRadius: 4,
+          background: 'transparent',
+          color: copied ? 'var(--ok)' : 'var(--fg-3)',
+          cursor: 'pointer',
+          flexShrink: 0,
+        }}
+      >
+        {copied ? <Check size={11} /> : <Copy size={11} />}
+      </button>
     </div>
   );
 }
