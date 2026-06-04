@@ -1,6 +1,9 @@
 import { GraphQLClient } from 'graphql-request';
 import type { GqlDashboardResponse } from '../types/github';
 import type { Scope } from './storage';
+import type { ReviewEvent } from './reviewActions';
+
+export type { ReviewEvent } from './reviewActions';
 
 export const GITHUB_ENDPOINT = 'https://api.github.com/graphql';
 
@@ -198,6 +201,49 @@ export async function testConnection(token: string): Promise<{ login: string }> 
     'query { viewer { login } }'
   );
   return data.viewer;
+}
+
+export const SUBMIT_REVIEW_MUTATION = /* GraphQL */ `
+  mutation SubmitReview(
+    $pullRequestId: ID!
+    $event: PullRequestReviewEvent!
+    $body: String
+  ) {
+    addPullRequestReview(
+      input: { pullRequestId: $pullRequestId, event: $event, body: $body }
+    ) {
+      pullRequestReview {
+        id
+        state
+      }
+    }
+  }
+`;
+
+/**
+ * Submit a review on a PR. `addPullRequestReview` both creates and
+ * submits in one call when `event` is provided, so there's no separate
+ * "create draft then submit" step. `pullRequestId` is the GraphQL node
+ * id carried on every DashboardPR (`pr.id`). Throws on GraphQL/HTTP
+ * error; callers surface it (redacting the PAT first).
+ */
+export async function submitReview(
+  token: string,
+  pullRequestId: string,
+  event: ReviewEvent,
+  body: string,
+): Promise<void> {
+  const client = createClient(token);
+  await client.request<{
+    addPullRequestReview: { pullRequestReview: { id: string; state: string } | null };
+  }>(SUBMIT_REVIEW_MUTATION, {
+    pullRequestId,
+    event,
+    // Normalize whitespace before sending: this helper owns the
+    // payload the API receives. APPROVE permits an empty body; the
+    // other verdicts are gated upstream by reviewActionEnabled.
+    body: body.trim(),
+  });
 }
 
 /** Build a GitHub search query that returns open PRs across the given orgs. */

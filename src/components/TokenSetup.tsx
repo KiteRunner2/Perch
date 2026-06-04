@@ -109,9 +109,10 @@ export function TokenSetup() {
           >
             Perch runs entirely in your browser. Paste a GitHub Personal Access
             Token with <Code>repo</Code>, <Code>read:org</Code>, and{' '}
-            <Code>read:user</Code> scopes. The token is stored in{' '}
-            <Code>localStorage</Code> — nothing leaves this machine except the
-            GitHub API calls.
+            <Code>read:user</Code> scopes. The <Code>repo</Code> scope also lets
+            you submit reviews (approve, request changes, comment) from the PR
+            modal. The token is stored in <Code>localStorage</Code> — nothing
+            leaves this machine except the GitHub API calls.
           </p>
 
           <a
