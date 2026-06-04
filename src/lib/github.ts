@@ -234,11 +234,14 @@ export async function submitReview(
   body: string,
 ): Promise<void> {
   const client = createClient(token);
-  await client.request(SUBMIT_REVIEW_MUTATION, {
+  await client.request<{
+    addPullRequestReview: { pullRequestReview: { id: string; state: string } | null };
+  }>(SUBMIT_REVIEW_MUTATION, {
     pullRequestId,
     event,
-    // GitHub treats an empty body as "no summary" only for APPROVE;
-    // the composer guarantees a non-empty body for the other verdicts.
+    // Normalize whitespace before sending: this helper owns the
+    // payload the API receives. APPROVE permits an empty body; the
+    // other verdicts are gated upstream by reviewActionEnabled.
     body: body.trim(),
   });
 }
