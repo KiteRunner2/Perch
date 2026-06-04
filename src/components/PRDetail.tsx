@@ -6,6 +6,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Loader2,
 } from 'lucide-react';
 import { formatDistanceToNowStrict } from 'date-fns';
 import ReactMarkdown from 'react-markdown';
@@ -18,6 +19,10 @@ import {
   TONE_STYLE,
 } from './primitives';
 import { DiffTab } from './DiffTab';
+import { useSubmitReview } from '../hooks/useSubmitReview';
+import { reviewActionEnabled, type ReviewEvent } from '../lib/reviewActions';
+import { redactToken } from '../lib/storage';
+import { useUIStore } from '../store';
 
 interface Props {
   pr: DashboardPR;
@@ -391,46 +396,50 @@ export function PRDetail({
           borderTop: '1px solid var(--line-1)',
           background: 'var(--bg-2)',
           display: 'flex',
-          gap: 6,
+          flexDirection: 'column',
+          gap: 10,
         }}
       >
-        <a
-          href={pr.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            height: 30,
-            padding: '0 12px',
-            borderRadius: 6,
-            background: 'var(--accent)',
-            color: 'var(--accent-fg)',
-            fontSize: 12,
-            fontWeight: 600,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 7,
-            textDecoration: 'none',
-          }}
-        >
-          <ExternalLink size={12} />
-          Open on GitHub
-        </a>
-        <span style={{ flex: 1 }} />
-        <button
-          onClick={onClose}
-          style={{
-            height: 30,
-            padding: '0 10px',
-            borderRadius: 6,
-            border: '1px solid var(--line-2)',
-            background: 'var(--bg-1)',
-            color: 'var(--fg-1)',
-            cursor: 'pointer',
-            fontSize: 12,
-          }}
-        >
-          Close
-        </button>
+        <ReviewComposer pr={pr} />
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <a
+            href={pr.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              height: 30,
+              padding: '0 12px',
+              borderRadius: 6,
+              background: 'var(--accent)',
+              color: 'var(--accent-fg)',
+              fontSize: 12,
+              fontWeight: 600,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 7,
+              textDecoration: 'none',
+            }}
+          >
+            <ExternalLink size={12} />
+            Open on GitHub
+          </a>
+          <span style={{ flex: 1 }} />
+          <button
+            onClick={onClose}
+            style={{
+              height: 30,
+              padding: '0 10px',
+              borderRadius: 6,
+              border: '1px solid var(--line-2)',
+              background: 'var(--bg-1)',
+              color: 'var(--fg-1)',
+              cursor: 'pointer',
+              fontSize: 12,
+            }}
+          >
+            Close
+          </button>
+        </div>
       </div>
       </aside>
     </div>
@@ -1152,4 +1161,123 @@ function CommentMarkdown({ body }: { body: string }) {
       {body}
     </ReactMarkdown>
   );
+}
+
+const VERDICTS: { event: ReviewEvent; label: string; tone: 'ok' | 'err' | 'neutral' }[] = [
+  { event: 'APPROVE', label: 'Approve', tone: 'ok' },
+  { event: 'REQUEST_CHANGES', label: 'Request changes', tone: 'err' },
+  { event: 'COMMENT', label: 'Comment', tone: 'neutral' },
+];
+
+function ReviewComposer({ pr }: { pr: DashboardPR }) {
+  const [body, setBody] = useState('');
+  const token = useUIStore((s) => s.token);
+  const mutation = useSubmitReview();
+  const pending = mutation.isPending;
+  const activeEvent = mutation.variables?.event;
+
+  function submit(event: ReviewEvent) {
+    mutation.mutate(
+      { pullRequestId: pr.id, event, body },
+      { onSuccess: () => setBody('') },
+    );
+  }
+
+  // Redact the PAT from any error before display, then add a friendly
+  // hint for the common "token lacks write scope" failure.
+  const errorMessage = (() => {
+    if (!mutation.error) return null;
+    let msg = mutation.error.message;
+    if (token) msg = msg.split(token).join(redactToken(token));
+    if (/permission|forbidden|403|not authorized|scope|resource not accessible/i.test(msg)) {
+      return `${msg} — your token may lack write access. It needs the "repo" scope (classic) or "Pull requests: Read and write" (fine-grained).`;
+    }
+    return msg;
+  })();
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <textarea
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        placeholder="Leave a review comment (optional for Approve)…"
+        rows={2}
+        disabled={pending}
+        style={{
+          width: '100%',
+          resize: 'vertical',
+          padding: '8px 10px',
+          borderRadius: 6,
+          border: '1px solid var(--line-2)',
+          background: 'var(--bg-1)',
+          color: 'var(--fg-0)',
+          fontSize: 12,
+          fontFamily: 'var(--font-sans)',
+          lineHeight: 1.5,
+          boxSizing: 'border-box',
+        }}
+      />
+      {errorMessage && (
+        <div
+          role="alert"
+          style={{
+            fontSize: 11.5,
+            color: 'var(--err)',
+            lineHeight: 1.4,
+          }}
+        >
+          {errorMessage}
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        {VERDICTS.map(({ event, label, tone }) => {
+          const enabled =
+            !pending && reviewActionEnabled(event, body, pr.viewerIsAuthor);
+          const isActive = pending && activeEvent === event;
+          const title =
+            pr.viewerIsAuthor && event !== 'COMMENT'
+              ? 'GitHub does not allow approving or requesting changes on your own PR'
+              : !pr.viewerIsAuthor && event !== 'APPROVE' && body.trim().length === 0
+                ? 'A comment is required for this action'
+                : undefined;
+          return (
+            <button
+              key={event}
+              onClick={() => submit(event)}
+              disabled={!enabled}
+              title={title}
+              style={verdictBtnStyle(tone, enabled)}
+            >
+              {isActive && <Loader2 size={12} className="spin" aria-hidden />}
+              {label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function verdictBtnStyle(
+  tone: 'ok' | 'err' | 'neutral',
+  enabled: boolean,
+): React.CSSProperties {
+  const color =
+    tone === 'ok' ? 'var(--ok)' : tone === 'err' ? 'var(--err)' : 'var(--fg-1)';
+  const border = tone === 'neutral' ? 'var(--line-2)' : color;
+  return {
+    height: 30,
+    padding: '0 12px',
+    borderRadius: 6,
+    border: `1px solid ${border}`,
+    background: 'var(--bg-1)',
+    color,
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: enabled ? 'pointer' : 'not-allowed',
+    opacity: enabled ? 1 : 0.45,
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+  };
 }
