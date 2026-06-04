@@ -1173,6 +1173,11 @@ function ReviewComposer({ pr }: { pr: DashboardPR }) {
   const [body, setBody] = useState('');
   const token = useUIStore((s) => s.token);
   const mutation = useSubmitReview();
+
+  // No review actions on merged PRs — they're historical, and GitHub
+  // rejects approve/request-changes on a merged PR.
+  if (pr.isMerged) return null;
+
   const pending = mutation.isPending;
   const activeEvent = mutation.variables?.event;
 
@@ -1235,12 +1240,13 @@ function ReviewComposer({ pr }: { pr: DashboardPR }) {
           const enabled =
             !pending && reviewActionEnabled(event, body, pr.viewerIsAuthor);
           const isActive = pending && activeEvent === event;
-          const title =
-            pr.viewerIsAuthor && event !== 'COMMENT'
-              ? 'GitHub does not allow approving or requesting changes on your own PR'
-              : !pr.viewerIsAuthor && event !== 'APPROVE' && body.trim().length === 0
-                ? 'A comment is required for this action'
-                : undefined;
+          const needsBody = event !== 'APPROVE' && body.trim().length === 0;
+          const blockedAsAuthor = pr.viewerIsAuthor && event !== 'COMMENT';
+          const title = blockedAsAuthor
+            ? 'GitHub does not allow approving or requesting changes on your own PR'
+            : needsBody
+              ? 'A comment is required for this action'
+              : undefined;
           return (
             <button
               key={event}
