@@ -400,7 +400,7 @@ export function PRDetail({
           gap: 10,
         }}
       >
-        <ReviewComposer pr={pr} />
+        <ReviewComposer key={pr.id} pr={pr} />
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <a
             href={pr.url}
@@ -1200,6 +1200,7 @@ function ReviewComposer({ pr }: { pr: DashboardPR }) {
       <textarea
         value={body}
         onChange={(e) => setBody(e.target.value)}
+        aria-label="Review comment"
         placeholder="Leave a review comment (optional for Approve)…"
         rows={2}
         disabled={pending}
@@ -1243,6 +1244,7 @@ function ReviewComposer({ pr }: { pr: DashboardPR }) {
           return (
             <button
               key={event}
+              type="button"
               onClick={() => submit(event)}
               disabled={!enabled}
               title={title}
