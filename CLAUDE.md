@@ -8,8 +8,9 @@ work, see [`ROADMAP.md`](ROADMAP.md).
 
 Perch is a single-user, client-only GitHub PR inbox. Everything runs in
 the browser. There is no backend, no database, no SSR. The Personal
-Access Token lives in `localStorage`; GraphQL calls go straight to
-`api.github.com`.
+Access Token lives in `localStorage`; calls go straight to
+`api.github.com` — GraphQL for the inbox itself, and REST
+(`GET /pulls/{n}/files`) for the Diff tab.
 
 Keep that boundary intact. If a feature needs server-side code, flag
 it explicitly — don't sneak it in.
@@ -19,10 +20,12 @@ it explicitly — don't sneak it in.
 - **Vite + React 18 + TypeScript (strict)**
 - **Tailwind CSS v4** (but most components use inline styles with CSS
   custom properties — see below)
-- **graphql-request** for GitHub's GraphQL API
+- **graphql-request** for GitHub's GraphQL API (Diff tab uses plain
+  `fetch` against REST)
 - **@tanstack/react-query** for fetching + 60s polling
 - **zustand** for UI state, **date-fns** for time, **lucide-react** for
-  icons
+  icons, **react-markdown** + **remark-gfm** for rendering PR/comment
+  bodies
 - **Bun** is the only package manager. Do not run `npm install` or
   `yarn` — if something fails under Bun, flag it, don't switch tools.
 
@@ -32,7 +35,8 @@ it explicitly — don't sneak it in.
 bun dev              # Vite dev server on :5173
 bun run build        # Strict tsc + Vite build → dist/
 bun run typecheck    # tsc -b --noEmit
-bun test             # Vitest run (bucketing + transform tests)
+bun test             # Vitest run (bucketing, transform, diff, reviewActions)
+bun test src/lib/bucketing.test.ts   # Run a single test file
 bun run test:watch   # Watch mode
 ```
 
@@ -49,13 +53,19 @@ Do **not** claim a task is done without these green.
 ```
 src/
   lib/          Pure logic: GraphQL client, transform, bucketing,
-                storage, seen-set.
-  hooks/        usePRs (react-query), useKeyboardNav, useNewPRs,
-                useTitleAndFavicon, useVersionCheck.
-  components/   All React components. Dashboard is the orchestrator.
+                storage, seen-set, diff (REST parse + generated-file
+                heuristics), reviewActions (submittable-verdict rules),
+                viewedFiles (per-PR "mark viewed" localStorage).
+  hooks/        usePRs (react-query), usePRDiff (REST diff fetch),
+                useSubmitReview (review mutation), useNewComments,
+                useKeyboardNav, useNewPRs, useTitleAndFavicon,
+                useVersionCheck.
+  components/   All React components. Dashboard is the orchestrator;
+                PRDetail hosts the modal with DiffTab + review composer.
                 primitives.tsx holds shared chips / avatar / kbd.
   types/        github.ts (GraphQL response), dashboard.ts (domain
-                DashboardPR), env.d.ts (build-time globals).
+                DashboardPR), diff.ts (parsed diff model),
+                env.d.ts (build-time globals).
   store.ts      Zustand UI store (token, theme, scope, selection).
   version.ts    Exposes the baked-in __APP_VERSION__ constant.
 ```
@@ -178,3 +188,17 @@ identifiers — use the `.mono` and `.num` classes defined in
   original message. `src/lib/storage.ts` has the helper.
 - **Bun's test runner picks up `*.test.ts`.** Don't name unrelated
   fixture files `*.test.ts`.
+- **Review submission mirrors GitHub's rules client-side.**
+  `reviewActionEnabled` in `src/lib/reviewActions.ts` gates the composer
+  buttons: you can't APPROVE/REQUEST_CHANGES your own PR, and
+  REQUEST_CHANGES/COMMENT need a non-empty body (APPROVE doesn't). Keep
+  this in sync with what the API enforces so we fail in the UI instead
+  of round-tripping to a rejection.
+- **"Mark as viewed" is local-only.** `src/lib/viewedFiles.ts` persists
+  to `localStorage` keyed by `{prId}::{path}` — it does NOT call
+  GitHub's `markFileAsViewed` mutation, so it won't sync to the GitHub
+  UI. Don't assume the two are connected.
+- **Diff "Hide generated" is a path heuristic.** REST `/files` doesn't
+  flag machine-generated files, so `isGeneratedPath` in
+  `src/lib/diff.ts` guesses from the path. Add patterns there rather
+  than special-casing in components.
