@@ -155,6 +155,16 @@ button {
   50% { opacity: 0.5; }
 }
 
+/* CI "pending" indicator: a slowly rotating, gently pulsing dashed ring
+   so PRs with a running pipeline are easy to spot in the list. */
+.ci-running {
+  transform-origin: center;
+  animation: spin 1.6s linear infinite, pulse 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ci-running { animation: pulse 1.6s ease-in-out infinite; }
+}
+
 @keyframes shimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }

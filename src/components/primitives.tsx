@@ -276,13 +276,19 @@ export function CIStatusChip({
         />
       </svg>
     ) : state === 'pending' ? (
-      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+      <svg
+        className="ci-running"
+        width="12"
+        height="12"
+        viewBox="0 0 12 12"
+        fill="none"
+      >
         <circle
           cx="6"
           cy="6"
           r="5"
           stroke={s.c}
-          strokeWidth="1.3"
+          strokeWidth="1.6"
           strokeDasharray="2 1.5"
         />
       </svg>
