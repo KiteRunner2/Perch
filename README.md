@@ -26,7 +26,10 @@ refresh, so you never stare at a stale build for long.
   - `read:user`
 
 The token is stored in your browser's `localStorage` only. It is never sent
-anywhere except `api.github.com`.
+anywhere except `api.github.com`. The `repo` scope also covers the write
+actions Perch offers (submitting reviews, re-running workflows); with a
+fine-grained token you'd need "Pull requests: Read and write" and
+"Actions: Read and write".
 
 ## Getting started
 
@@ -55,14 +58,15 @@ icon in the header).
 | `bun run build` | Type-check (strict) and build to `dist/` |
 | `bun run preview` | Preview the production build |
 | `bun run typecheck` | Strict TypeScript check, no emit |
-| `bun test` | Run the bucketing unit tests once |
-| `bun run test:watch` | Watch the bucketing unit tests |
+| `bun test` | Run the unit tests once (bucketing, transform, diff, review actions, re-run planning) |
+| `bun run test:watch` | Watch the unit tests |
 
 ## Keyboard shortcuts
 
 | Key | Action |
 | --- | --- |
 | `j` / `k` | Select next / previous PR |
+| `↓`/`→` / `↑`/`←` | Aliases for `j` / `k` |
 | `↵` | Open selected PR on GitHub (new tab) |
 | `e` | Toggle PR detail drawer |
 | `/` | Focus the filter input |
@@ -99,17 +103,19 @@ match wins):
    `MERGEABLE`, not draft. Hidden when empty.
 4. **My PRs in review** — you're the author and the PR doesn't match the
    above. Hidden when empty.
-5. **Stale** — a PR you're involved with that hasn't been updated in 7+
-   days.
-6. **Needs reviewers** — open team PRs with fewer than two reviewers
+5. **Needs reviewers** — open team PRs with fewer than two reviewers
    that you haven't been pulled into. Surfaces "I could pick this one
    up" candidates. Hidden when empty; only populates in Team scope.
-7. **Team** — broader-scope PRs where you have no direct relation (only
+6. **Team** — broader-scope PRs where you have no direct relation (only
    populates in Team scope).
-8. **Other** — rare; shown only when non-empty.
-9. **Recently merged** — PRs you authored or reviewed that merged in
+7. **Other** — rare; shown only when non-empty.
+8. **Recently merged** — PRs you authored or reviewed that merged in
    the last 7 days. Historical, not attention-demanding — collapsed by
    default and tucked at the bottom.
+
+Staleness (no activity for a while) is not a bucket — it's a per-row
+chip driven by the pure `isStale` predicate, so buckets stay mutually
+exclusive.
 
 The logic lives in a pure function at [`src/lib/bucketing.ts`](src/lib/bucketing.ts).
 Tests are in [`src/lib/bucketing.test.ts`](src/lib/bucketing.test.ts).
@@ -119,13 +125,24 @@ Tests are in [`src/lib/bucketing.test.ts`](src/lib/bucketing.test.ts).
 ```
 src/
   lib/
-    github.ts          # GraphQL client + query
-    bucketing.ts       # pure bucketing logic
-    bucketing.test.ts  # unit tests
+    github.ts          # GraphQL client, dashboard query, review mutation
+    bucketing.ts       # pure bucketing logic + isStale predicate
     transform.ts       # raw GraphQL -> DashboardPR
-    storage.ts         # token + theme persistence
+    diff.ts            # REST /files fetch, patch parsing, generated-file heuristics
+    rerun.ts           # Actions re-run planning + REST calls
+    reviewActions.ts   # which review verdicts are submittable (mirrors GitHub)
+    viewedFiles.ts     # per-PR "mark file viewed" persistence (local-only)
+    seen.ts            # last-visit snapshots for new-PR / new-comment deltas
+    storage.ts         # token + theme persistence, token redaction
+    *.test.ts          # unit tests next to their source
   hooks/
     usePRs.ts          # react-query hook (60s refetch)
+    usePRDiff.ts       # lazy REST diff fetch for the Diff tab
+    useSubmitReview.ts # review submission mutation
+    useRerunPipeline.ts# re-run all Actions workflows for a head SHA
+    useNewPRs.ts / useNewComments.ts   # since-last-visit deltas
+    useTitleAndFavicon.ts              # pinned-tab freshness signal
+    useVersionCheck.ts # polls /version.json, prompts reload on new deploy
     useKeyboardNav.ts  # global keyboard handler
   components/
     Dashboard.tsx      # top-level orchestrator
@@ -134,17 +151,21 @@ src/
     HeadlineBand.tsx   # stats strip
     BucketSection.tsx  # collapsible bucket
     PRRow.tsx          # single row
-    PRDetail.tsx       # right-side detail drawer
+    PRDetail.tsx       # centered modal: timeline, review composer, re-run CI
+    DiffTab.tsx        # file rail + unified diff view inside the modal
     TokenSetup.tsx     # first-run token screen
     Settings.tsx       # settings modal (theme, token reset, rate limit)
     HelpOverlay.tsx    # keyboard shortcut overlay
+    UpdateAvailableChip.tsx            # "new build deployed" prompt
     LoadingSkeleton.tsx
     ErrorBanner.tsx
     primitives.tsx     # Avatar, Kbd, ApprovalChip, CIStatusChip, labels
   types/
     github.ts          # GraphQL response types
     dashboard.ts       # DashboardPR + bucket types
+    diff.ts            # parsed diff model
   store.ts             # zustand UI store
+  version.ts           # baked-in __APP_VERSION__
   App.tsx
   main.tsx
   index.css            # design tokens (dark + light)
@@ -158,9 +179,9 @@ src/
 - The raw response is flattened by
   [`transformDashboard`](src/lib/transform.ts) into `DashboardPR` domain
   objects — pre-computed `approvalCount`, `ciStatus`, `waitingTimeMs`, etc.
-- [`bucketize`](src/lib/bucketing.ts) groups the flat list into five ordered
-  buckets. PRs that appear in both `viewer.pullRequests` and
-  `review-requested:@me` results are deduped by id.
+- [`bucketize`](src/lib/bucketing.ts) groups the flat list into the ordered,
+  mutually exclusive buckets. PRs that appear across multiple search
+  aliases (authored, review-requested, team, merged) are deduped by id.
 
 ## Theming
 
@@ -177,7 +198,17 @@ in `localStorage`.
 
 ## Scope
 
-This is the MVP: inbox view with auto-refresh and a detail drawer. Actions
-on PRs (approve, comment, merge) aren't supported — clicking a row opens
-the real GitHub page in a new tab. See [`instructions.md`](instructions.md)
-for the original spec.
+Perch started as a read-only inbox and has grown a few write actions, all
+through the same PAT, still with no backend:
+
+- **Read the diff** — a Diff tab in the PR modal with a file rail,
+  mark-as-viewed, and a "Hide generated" toggle.
+- **Submit reviews** — Approve / Request changes / Comment from the modal,
+  with GitHub's submission rules mirrored client-side.
+- **Re-run the CI pipeline** — re-triggers every Actions workflow for the
+  PR's head commit, green or not (useful for redeploying branch sandboxes
+  that get torn down nightly).
+
+Merging still happens on GitHub — "Open on GitHub" gets you there. See
+[`instructions.md`](instructions.md) for the original spec and
+[`ROADMAP.md`](ROADMAP.md) for what's next.

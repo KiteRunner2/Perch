@@ -74,6 +74,21 @@ items into "shipped" with the commit SHA.
       - Prev/next chevrons + `3/27` counter in the modal header so
         you can walk PRs without closing. Arrow keys (←/→/↑/↓)
         added as a modal-y alias for j/k.
+- [x] Diff tab file list moved to a left rail (`9b17bf2`)
+- [x] Stale demoted from a bucket to a per-row chip — buckets are
+      mutually exclusive again, staleness is the pure `isStale`
+      predicate (`8ff5ff9`, `a05ae04`)
+- [x] Copyable PR URL line in the modal (`2ffed66`)
+- [x] Review composer in the modal — Approve / Request changes /
+      Comment via `addPullRequestReview`, with GitHub's submission
+      rules mirrored client-side (no self-approval, body required
+      for non-approve verdicts) and hidden on merged PRs (`20f3ce6`)
+- [x] Animated pending CI indicator so running pipelines stand out
+      (`f8decd1`)
+- [x] Re-run CI button in the modal — re-triggers the latest Actions
+      run of every workflow for the PR's head SHA via REST, green
+      runs included, to revive branch sandboxes that get torn down
+      nightly (`294c02e`)
 
 ## Up next
 
@@ -98,8 +113,10 @@ items into "shipped" with the commit SHA.
 
 These are explicitly deferred; revisit if the tool graduates from MVP.
 
-- Write actions: approve / comment / merge from Perch. Clicking a row
-  opens the real GitHub page instead.
+- Merging from Perch. Review actions (approve / request changes /
+  comment) and CI re-run shipped after all, but merge stays on
+  GitHub — it's the one click that deserves the full context of the
+  real PR page.
 - OAuth flow. Personal Access Token is the auth model.
 - Multi-user support / shared inboxes.
 - Desktop / push notifications. The tab badge + favicon cover most of
