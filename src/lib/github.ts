@@ -73,6 +73,7 @@ export const DASHBOARD_QUERY = /* GraphQL */ `
     totalCommentsCount
     body
     headRefName
+    headRefOid
     baseRefName
     repository { nameWithOwner isArchived }
     author {

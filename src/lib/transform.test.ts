@@ -21,6 +21,7 @@ function makeGqlPR(overrides: Partial<GqlPullRequest> = {}): GqlPullRequest {
     totalCommentsCount: 0,
     body: '',
     headRefName: 'feature/example',
+    headRefOid: 'abc123def456',
     baseRefName: 'main',
     repository: { nameWithOwner: 'example/repo', isArchived: false },
     author: { login: 'alice' },

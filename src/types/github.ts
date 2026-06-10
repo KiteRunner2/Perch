@@ -93,6 +93,8 @@ export interface GqlPullRequest {
   body: string;
   /** Source branch (the branch being merged in). */
   headRefName: string;
+  /** SHA of the head commit — keys REST lookups like Actions runs. */
+  headRefOid: string;
   /** Target branch (usually `main`). */
   baseRefName: string;
   repository: { nameWithOwner: string; isArchived: boolean };

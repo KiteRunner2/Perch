@@ -96,6 +96,8 @@ export interface DashboardPR {
   commitCount: number;
   /** Source branch name (the one being merged in). */
   headRefName: string;
+  /** SHA of the head commit — used to find the PR's Actions runs. */
+  headSha: string;
   /** Target branch name (usually main / master). */
   baseRefName: string;
   /** Total conversation — issue comments + review thread comments. */

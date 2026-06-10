@@ -37,6 +37,7 @@ function makePR(overrides: Partial<DashboardPR> = {}): DashboardPR {
     lastCommitAt: new Date(now - 60 * 60 * 1000).toISOString(),
     lastCommentAt: new Date(now - 60 * 60 * 1000).toISOString(),
     headRefName: 'feature/example',
+    headSha: 'abc123def456',
     baseRefName: 'main',
     timeline: [],
   };

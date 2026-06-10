@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  RotateCw,
 } from 'lucide-react';
 import { formatDistanceToNowStrict } from 'date-fns';
 import ReactMarkdown from 'react-markdown';
@@ -20,6 +21,7 @@ import {
 } from './primitives';
 import { DiffTab } from './DiffTab';
 import { useSubmitReview } from '../hooks/useSubmitReview';
+import { useRerunPipeline } from '../hooks/useRerunPipeline';
 import { reviewActionEnabled, type ReviewEvent } from '../lib/reviewActions';
 import { redactToken } from '../lib/storage';
 import { useUIStore } from '../store';
@@ -423,6 +425,7 @@ export function PRDetail({
             <ExternalLink size={12} />
             Open on GitHub
           </a>
+          <RerunButton key={pr.id} pr={pr} />
           <span style={{ flex: 1 }} />
           <button
             onClick={onClose}
@@ -1160,6 +1163,100 @@ function CommentMarkdown({ body }: { body: string }) {
     >
       {body}
     </ReactMarkdown>
+  );
+}
+
+/**
+ * Re-run the PR's whole Actions pipeline for its head SHA — green runs
+ * included. Exists mainly to revive branch sandboxes that get torn
+ * down nightly, so it's offered regardless of CI state, except while
+ * checks are running (GitHub 403s re-run of unfinished runs).
+ */
+function RerunButton({ pr }: { pr: DashboardPR }) {
+  const token = useUIStore((s) => s.token);
+  const mutation = useRerunPipeline();
+
+  // Merged PRs are historical; their sandbox is gone for good and the
+  // runs are likely past the 30-day re-run window anyway.
+  if (pr.isMerged) return null;
+
+  const running = pr.ciStatus === 'pending';
+  const enabled = !running && !mutation.isPending;
+  const title = running
+    ? 'Checks are already running — GitHub cannot re-run unfinished workflows'
+    : 'Re-run all workflows for the latest commit (e.g. to redeploy the branch sandbox)';
+
+  const errorMessage = (() => {
+    if (!mutation.error) return null;
+    let msg = mutation.error.message;
+    if (token) msg = msg.split(token).join(redactToken(token));
+    if (/permission|forbidden|403|not authorized|scope|resource not accessible/i.test(msg)) {
+      return `${msg} — your token may lack write access. Re-running workflows needs the "repo" scope (classic) or "Actions: Read and write" (fine-grained).`;
+    }
+    return msg;
+  })();
+
+  const statusText = errorMessage
+    ? errorMessage
+    : mutation.isSuccess
+      ? mutation.data.started > 0
+        ? `Re-run started (${mutation.data.started} ${mutation.data.started === 1 ? 'workflow' : 'workflows'})`
+        : 'Pipeline already running'
+      : null;
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() =>
+          mutation.mutate({
+            repoNameWithOwner: pr.repoNameWithOwner,
+            headSha: pr.headSha,
+          })
+        }
+        disabled={!enabled}
+        title={title}
+        style={{
+          height: 30,
+          padding: '0 12px',
+          borderRadius: 6,
+          border: '1px solid var(--line-2)',
+          background: 'var(--bg-1)',
+          color: 'var(--fg-1)',
+          fontSize: 12,
+          fontWeight: 600,
+          cursor: enabled ? 'pointer' : 'not-allowed',
+          opacity: enabled ? 1 : 0.45,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+        }}
+      >
+        {mutation.isPending ? (
+          <Loader2 size={12} className="spin" aria-hidden />
+        ) : (
+          <RotateCw size={12} aria-hidden />
+        )}
+        Re-run CI
+      </button>
+      {statusText && (
+        <span
+          role={errorMessage ? 'alert' : 'status'}
+          style={{
+            fontSize: 11,
+            color: errorMessage ? 'var(--err)' : 'var(--ok)',
+            lineHeight: 1.4,
+            maxWidth: 360,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+          title={statusText}
+        >
+          {statusText}
+        </span>
+      )}
+    </>
   );
 }
 

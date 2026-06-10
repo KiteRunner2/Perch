@@ -314,6 +314,7 @@ export function transformPR(
     lastCommitAt,
     lastCommentAt,
     headRefName: pr.headRefName,
+    headSha: pr.headRefOid,
     baseRefName: pr.baseRefName,
     timeline: buildTimeline(pr, author),
   };
