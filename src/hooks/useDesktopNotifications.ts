@@ -29,6 +29,7 @@ function fire(
       tag: 'perch-summary',
     });
     n.onclick = () => {
+      // No single PR to open for a summary — just surface the tab.
       window.focus();
       n.close();
     };
