@@ -43,8 +43,14 @@ export function Settings({ rateLimit }: Props) {
   }
 
   useEffect(() => {
-    if (settingsOpen) setOrgsInput(orgs.join(', '));
-  }, [settingsOpen, orgs]);
+    if (settingsOpen) {
+      setOrgsInput(orgs.join(', '));
+      // Re-read the live browser permission each open so the toggle
+      // reflects changes made in site settings (and stays correct even
+      // if this panel is ever shown without remounting).
+      if (notifSupported) setNotifPermission(Notification.permission);
+    }
+  }, [settingsOpen, orgs, notifSupported]);
 
   function commitOrgs() {
     const next = orgsInput
