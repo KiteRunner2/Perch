@@ -21,8 +21,26 @@ export function Settings({ rateLimit }: Props) {
   const setScope = useUIStore((s) => s.setScope);
   const orgs = useUIStore((s) => s.orgs);
   const setOrgs = useUIStore((s) => s.setOrgs);
+  const notificationsEnabled = useUIStore((s) => s.notificationsEnabled);
+  const setNotificationsEnabled = useUIStore((s) => s.setNotificationsEnabled);
 
   const [orgsInput, setOrgsInput] = useState(orgs.join(', '));
+
+  const notifSupported = typeof Notification !== 'undefined';
+  const [notifPermission, setNotifPermission] = useState<
+    NotificationPermission | 'unsupported'
+  >(notifSupported ? Notification.permission : 'unsupported');
+
+  async function enableNotifications() {
+    if (!notifSupported) return;
+    if (Notification.permission === 'granted') {
+      setNotificationsEnabled(true);
+      return;
+    }
+    const result = await Notification.requestPermission();
+    setNotifPermission(result);
+    setNotificationsEnabled(result === 'granted');
+  }
 
   useEffect(() => {
     if (settingsOpen) setOrgsInput(orgs.join(', '));
@@ -201,6 +219,56 @@ export function Settings({ rateLimit }: Props) {
                   onClick={() => setTheme('light')}
                 >
                   Light
+                </SegBtn>
+              </div>
+            </Row>
+          </Group>
+
+          <Group title="Notifications">
+            <Row
+              label="Desktop notifications"
+              meta={
+                notifPermission === 'unsupported'
+                  ? 'Not supported in this browser'
+                  : notifPermission === 'denied'
+                    ? 'Blocked in your browser — re-enable in site settings'
+                    : 'Alerts for activity on your PRs: new comments, failed checks, merges, and reviews'
+              }
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  gap: 4,
+                  padding: 3,
+                  background: 'var(--bg-2)',
+                  border: '1px solid var(--line-1)',
+                  borderRadius: 6,
+                  opacity:
+                    notifPermission === 'unsupported' ||
+                    notifPermission === 'denied'
+                      ? 0.5
+                      : 1,
+                }}
+              >
+                <SegBtn
+                  active={!notificationsEnabled}
+                  onClick={() => setNotificationsEnabled(false)}
+                >
+                  Off
+                </SegBtn>
+                <SegBtn
+                  active={notificationsEnabled}
+                  onClick={() => {
+                    if (
+                      notifPermission === 'unsupported' ||
+                      notifPermission === 'denied'
+                    ) {
+                      return;
+                    }
+                    void enableNotifications();
+                  }}
+                >
+                  On
                 </SegBtn>
               </div>
             </Row>
