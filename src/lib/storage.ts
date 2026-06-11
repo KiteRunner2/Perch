@@ -2,6 +2,7 @@ const TOKEN_KEY = 'perch.token';
 const THEME_KEY = 'perch.theme';
 const SCOPE_KEY = 'perch.scope';
 const ORGS_KEY = 'perch.orgs';
+const NOTIFICATIONS_KEY = 'perch.notifications';
 
 export type Theme = 'dark' | 'light';
 export type Scope = 'inbox' | 'all';
@@ -48,6 +49,16 @@ export const storage = {
   },
   setOrgs(orgs: string[]): void {
     localStorage.setItem(ORGS_KEY, JSON.stringify(orgs));
+  },
+  getNotifications(): boolean {
+    try {
+      return localStorage.getItem(NOTIFICATIONS_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  },
+  setNotifications(enabled: boolean): void {
+    localStorage.setItem(NOTIFICATIONS_KEY, enabled ? 'true' : 'false');
   },
 };
 
