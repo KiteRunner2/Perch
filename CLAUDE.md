@@ -202,3 +202,12 @@ identifiers — use the `.mono` and `.num` classes defined in
   flag machine-generated files, so `isGeneratedPath` in
   `src/lib/diff.ts` guesses from the path. Add patterns there rather
   than special-casing in components.
+- **Desktop notifications are tab-bound, not push.** `useDesktopNotifications`
+  fires `Notification`s by diffing a per-poll in-memory snapshot of the
+  viewer's *authored* PRs (new comment, CI failure, merge, approval/changes).
+  It needs the tab open — there is no service worker or Push API (that would
+  need a backend, which the client-only boundary forbids). Notifications also
+  flip `refetchIntervalInBackground` on in `usePRs`, so the 60s poll keeps
+  running in a hidden tab only while the preference is on. The preference
+  (`perch.notifications`, default off) is separate from the browser's
+  `Notification.permission`.
