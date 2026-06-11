@@ -24,7 +24,7 @@ export interface NotificationEvent {
   kind: NotificationKind;
 }
 
-function snapshotPR(pr: DashboardPR): PRSnapshot {
+export function snapshotPR(pr: DashboardPR): PRSnapshot {
   return {
     commentCount: pr.commentCount,
     ciStatus: pr.ciStatus,
