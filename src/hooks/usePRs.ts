@@ -17,18 +17,21 @@ interface Args {
   token: string | null;
   scope: Scope;
   orgs: string[];
+  notificationsEnabled?: boolean;
 }
 
 export function usePRs({
   token,
   scope,
   orgs,
+  notificationsEnabled = false,
 }: Args): UseQueryResult<DashboardData, Error> {
   const effectiveScope: Scope = orgs.length === 0 ? 'inbox' : scope;
   return useQuery<DashboardData, Error>({
     queryKey: ['dashboard', token, effectiveScope, orgs.join(',')],
     enabled: Boolean(token),
     refetchInterval: 60_000,
+    refetchIntervalInBackground: notificationsEnabled,
     refetchOnWindowFocus: true,
     staleTime: 30_000,
     queryFn: async () => {
