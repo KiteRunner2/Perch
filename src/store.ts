@@ -12,6 +12,7 @@ interface UIState {
   helpOpen: boolean;
   searchQuery: string;
   collapsedBuckets: Set<string>;
+  notificationsEnabled: boolean;
   setToken: (token: string | null) => void;
   setTheme: (theme: Theme) => void;
   setScope: (scope: Scope) => void;
@@ -22,6 +23,7 @@ interface UIState {
   setHelpOpen: (open: boolean) => void;
   setSearchQuery: (q: string) => void;
   toggleBucket: (id: string) => void;
+  setNotificationsEnabled: (enabled: boolean) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -34,6 +36,7 @@ export const useUIStore = create<UIState>((set) => ({
   settingsOpen: false,
   helpOpen: false,
   searchQuery: '',
+  notificationsEnabled: storage.getNotifications(),
   // Start with "Recently merged" folded since it's historical and not
   // the attention-first signal.
   collapsedBuckets: new Set<string>(['merged']),
@@ -46,6 +49,10 @@ export const useUIStore = create<UIState>((set) => ({
     storage.setTheme(theme);
     document.documentElement.dataset.theme = theme;
     set({ theme });
+  },
+  setNotificationsEnabled: (enabled) => {
+    storage.setNotifications(enabled);
+    set({ notificationsEnabled: enabled });
   },
   setScope: (scope) => {
     storage.setScope(scope);
