@@ -6,6 +6,7 @@ import { useKeyboardNav } from '../hooks/useKeyboardNav';
 import { useNewPRs } from '../hooks/useNewPRs';
 import { useNewComments } from '../hooks/useNewComments';
 import { useTitleAndFavicon } from '../hooks/useTitleAndFavicon';
+import { useDesktopNotifications } from '../hooks/useDesktopNotifications';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { HeadlineBand } from './HeadlineBand';
@@ -28,8 +29,9 @@ export function Dashboard() {
   const detailOpen = useUIStore((s) => s.detailOpen);
   const setDetailOpen = useUIStore((s) => s.setDetailOpen);
   const searchQuery = useUIStore((s) => s.searchQuery);
+  const notificationsEnabled = useUIStore((s) => s.notificationsEnabled);
 
-  const query = usePRs({ token, scope, orgs });
+  const query = usePRs({ token, scope, orgs, notificationsEnabled });
 
   // Keep a ticking "Xs ago" label without refetching constantly.
   const [now, setNow] = useState(() => Date.now());
@@ -97,6 +99,16 @@ export function Dashboard() {
   }, [refetch]);
 
   useKeyboardNav({ buckets, onRefresh });
+
+  const openPR = useCallback(
+    (id: string) => {
+      setSelectedPRId(id);
+      setDetailOpen(true);
+    },
+    [setSelectedPRId, setDetailOpen]
+  );
+
+  useDesktopNotifications(query.data?.prs ?? [], notificationsEnabled, openPR);
 
   const allIds = useMemo(() => filtered.map((p) => p.id), [filtered]);
   const newIds = useNewPRs(allIds);
