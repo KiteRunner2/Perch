@@ -205,6 +205,11 @@ identifiers — use the `.mono` and `.num` classes defined in
 - **Desktop notifications are tab-bound, not push.** `useDesktopNotifications`
   fires `Notification`s by diffing a per-poll in-memory snapshot of the
   viewer's *authored* PRs (new comment, CI failure, merge, approval/changes).
+  The comment rule is author-aware: it diffs `lastForeignCommentMs` (the
+  newest comment from someone *other than* the viewer, read off the
+  timeline) rather than the raw `commentCount`, so your own comments never
+  self-notify. This needs the viewer login threaded into
+  `snapshotAuthored`/`computeNotifications`.
   It needs the tab open — there is no service worker or Push API (that would
   need a backend, which the client-only boundary forbids). Notifications also
   flip `refetchIntervalInBackground` on in `usePRs`, so the 60s poll keeps

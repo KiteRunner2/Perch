@@ -1,4 +1,9 @@
-import type { ApprovalState, CIStatus, DashboardPR } from '../types/dashboard';
+import type {
+  ApprovalState,
+  CIStatus,
+  DashboardPR,
+  TimelineEventKind,
+} from '../types/dashboard';
 
 export type NotificationKind =
   | 'comment'
@@ -7,9 +12,35 @@ export type NotificationKind =
   | 'approved'
   | 'changes';
 
+/** Timeline kinds that count as "someone commented" for notifications. */
+const COMMENT_KINDS: ReadonlySet<TimelineEventKind> = new Set<TimelineEventKind>(
+  ['comment', 'review-comment', 'inline-comment']
+);
+
+/**
+ * Epoch-ms of the most recent comment authored by someone *other than*
+ * the viewer, or 0 if there is none. Basing the comment rule on this
+ * (rather than the raw `commentCount`) means the viewer's own comments
+ * never fire a self-notification.
+ */
+function latestForeignCommentMs(
+  pr: DashboardPR,
+  viewerLogin: string | null
+): number {
+  let latest = 0;
+  for (const event of pr.timeline) {
+    if (!COMMENT_KINDS.has(event.kind)) continue;
+    if (viewerLogin && event.author.login === viewerLogin) continue;
+    const t = Date.parse(event.at);
+    if (Number.isFinite(t) && t > latest) latest = t;
+  }
+  return latest;
+}
+
 /** The slice of a PR we diff between consecutive polls. */
 export interface PRSnapshot {
-  commentCount: number;
+  /** Epoch-ms of the latest non-viewer comment (see above). */
+  lastForeignCommentMs: number;
   ciStatus: CIStatus;
   approvalState: ApprovalState;
   isMerged: boolean;
@@ -24,9 +55,12 @@ export interface NotificationEvent {
   kind: NotificationKind;
 }
 
-export function snapshotPR(pr: DashboardPR): PRSnapshot {
+export function snapshotPR(
+  pr: DashboardPR,
+  viewerLogin: string | null
+): PRSnapshot {
   return {
-    commentCount: pr.commentCount,
+    lastForeignCommentMs: latestForeignCommentMs(pr, viewerLogin),
     ciStatus: pr.ciStatus,
     approvalState: pr.approvalState,
     isMerged: pr.isMerged,
@@ -37,10 +71,13 @@ export function snapshotPR(pr: DashboardPR): PRSnapshot {
  * Snapshot only the PRs the viewer authored — the only PRs notifications
  * fire for. Keyed by PR id.
  */
-export function snapshotAuthored(prs: DashboardPR[]): Map<string, PRSnapshot> {
+export function snapshotAuthored(
+  prs: DashboardPR[],
+  viewerLogin: string | null
+): Map<string, PRSnapshot> {
   const out = new Map<string, PRSnapshot>();
   for (const pr of prs) {
-    if (pr.viewerIsAuthor) out.set(pr.id, snapshotPR(pr));
+    if (pr.viewerIsAuthor) out.set(pr.id, snapshotPR(pr, viewerLogin));
   }
   return out;
 }
@@ -50,7 +87,9 @@ export function snapshotAuthored(prs: DashboardPR[]): Map<string, PRSnapshot> {
  * the notification events that should fire. Pure — fires nothing itself.
  *
  * Rules (all scoped to viewer-authored PRs):
- * - comment: commentCount increased
+ * - comment: a new comment from someone other than the viewer appeared
+ *   (the viewer's own comments never fire — that's the whole point of
+ *   diffing `lastForeignCommentMs` rather than the raw `commentCount`)
  * - ci-fail: ciStatus transitioned *into* 'failure' (success/pending never fire)
  * - merged:  isMerged flipped false -> true
  * - approved/changes: approvalState transitioned into that state
@@ -60,7 +99,8 @@ export function snapshotAuthored(prs: DashboardPR[]): Map<string, PRSnapshot> {
  */
 export function computeNotifications(
   prev: Map<string, PRSnapshot>,
-  next: DashboardPR[]
+  next: DashboardPR[],
+  viewerLogin: string | null
 ): NotificationEvent[] {
   const events: NotificationEvent[] = [];
   for (const pr of next) {
@@ -76,7 +116,7 @@ export function computeNotifications(
       url: pr.url,
     };
 
-    if (pr.commentCount > before.commentCount) {
+    if (latestForeignCommentMs(pr, viewerLogin) > before.lastForeignCommentMs) {
       events.push({ ...base, kind: 'comment' });
     }
     if (pr.ciStatus === 'failure' && before.ciStatus !== 'failure') {

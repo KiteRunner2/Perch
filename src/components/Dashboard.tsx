@@ -108,7 +108,12 @@ export function Dashboard() {
     [setSelectedPRId, setDetailOpen]
   );
 
-  useDesktopNotifications(query.data?.prs ?? [], notificationsEnabled, openPR);
+  useDesktopNotifications(
+    query.data?.prs ?? [],
+    notificationsEnabled,
+    query.data?.viewer.login ?? null,
+    openPR
+  );
 
   const allIds = useMemo(() => filtered.map((p) => p.id), [filtered]);
   const newIds = useNewPRs(allIds);

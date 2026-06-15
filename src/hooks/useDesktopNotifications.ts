@@ -61,6 +61,7 @@ function fire(
 export function useDesktopNotifications(
   prs: DashboardPR[],
   enabled: boolean,
+  viewerLogin: string | null,
   onOpenPR: (prId: string) => void
 ): void {
   const snapshotRef = useRef<Map<string, PRSnapshot> | null>(null);
@@ -69,7 +70,7 @@ export function useDesktopNotifications(
 
   useEffect(() => {
     const prev = snapshotRef.current;
-    const nextSnapshot = snapshotAuthored(prs);
+    const nextSnapshot = snapshotAuthored(prs, viewerLogin);
 
     if (prev === null) {
       // First run: seed silently.
@@ -82,9 +83,9 @@ export function useDesktopNotifications(
       typeof Notification !== 'undefined' &&
       Notification.permission === 'granted'
     ) {
-      fire(computeNotifications(prev, prs), onOpenRef.current);
+      fire(computeNotifications(prev, prs, viewerLogin), onOpenRef.current);
     }
 
     snapshotRef.current = nextSnapshot;
-  }, [prs, enabled]);
+  }, [prs, enabled, viewerLogin]);
 }
