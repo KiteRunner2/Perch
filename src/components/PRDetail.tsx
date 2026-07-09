@@ -8,6 +8,8 @@ import {
   ChevronRight,
   Loader2,
   RotateCw,
+  Send,
+  PenLine,
 } from 'lucide-react';
 import { formatDistanceToNowStrict } from 'date-fns';
 import ReactMarkdown from 'react-markdown';
@@ -22,6 +24,7 @@ import {
 import { DiffTab } from './DiffTab';
 import { useSubmitReview } from '../hooks/useSubmitReview';
 import { useRerunPipeline } from '../hooks/useRerunPipeline';
+import { useSetDraftState } from '../hooks/useSetDraftState';
 import { reviewActionEnabled, type ReviewEvent } from '../lib/reviewActions';
 import { redactToken } from '../lib/storage';
 import { useUIStore } from '../store';
@@ -426,6 +429,7 @@ export function PRDetail({
             Open on GitHub
           </a>
           <RerunButton key={pr.id} pr={pr} />
+          <DraftToggleButton key={`draft-${pr.id}`} pr={pr} />
           <span style={{ flex: 1 }} />
           <button
             onClick={onClose}
@@ -1254,6 +1258,85 @@ function RerunButton({ pr }: { pr: DashboardPR }) {
           title={statusText}
         >
           {statusText}
+        </span>
+      )}
+    </>
+  );
+}
+
+function DraftToggleButton({ pr }: { pr: DashboardPR }) {
+  const token = useUIStore((s) => s.token);
+  const mutation = useSetDraftState();
+
+  // Draft state is meaningless once merged, and GitHub only lets the
+  // author (or someone with write access) change it. Perch is a
+  // single-user inbox, so we gate on authorship and never render a
+  // button that is guaranteed to 403.
+  if (pr.isMerged || !pr.viewerIsAuthor) return null;
+
+  const toDraft = !pr.isDraft;
+  const enabled = !mutation.isPending;
+  const title = toDraft
+    ? 'Convert back to a draft — GitHub dismisses the PR’s pending review requests'
+    : 'Mark ready for review — reviewers get requested and the PR leaves draft state';
+
+  const errorMessage = (() => {
+    if (!mutation.error) return null;
+    let msg = mutation.error.message;
+    if (token) msg = msg.split(token).join(redactToken(token));
+    if (/permission|forbidden|403|not authorized|scope|resource not accessible/i.test(msg)) {
+      return `${msg} — your token may lack write access. Changing draft state needs the "repo" scope (classic) or "Pull requests: Read and write" (fine-grained).`;
+    }
+    return msg;
+  })();
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => mutation.mutate({ pullRequestId: pr.id, draft: toDraft })}
+        disabled={!enabled}
+        title={title}
+        style={{
+          height: 30,
+          padding: '0 12px',
+          borderRadius: 6,
+          border: '1px solid var(--line-2)',
+          background: 'var(--bg-1)',
+          color: 'var(--fg-1)',
+          fontSize: 12,
+          fontWeight: 600,
+          cursor: enabled ? 'pointer' : 'not-allowed',
+          opacity: enabled ? 1 : 0.45,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+        }}
+      >
+        {mutation.isPending ? (
+          <Loader2 size={12} className="spin" aria-hidden />
+        ) : toDraft ? (
+          <PenLine size={12} aria-hidden />
+        ) : (
+          <Send size={12} aria-hidden />
+        )}
+        {toDraft ? 'Mark as Draft' : 'Mark as Ready'}
+      </button>
+      {errorMessage && (
+        <span
+          role="alert"
+          style={{
+            fontSize: 11,
+            color: 'var(--err)',
+            lineHeight: 1.4,
+            maxWidth: 360,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+          title={errorMessage}
+        >
+          {errorMessage}
         </span>
       )}
     </>

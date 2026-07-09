@@ -247,6 +247,49 @@ export async function submitReview(
   });
 }
 
+export const CONVERT_TO_DRAFT_MUTATION = /* GraphQL */ `
+  mutation ConvertToDraft($pullRequestId: ID!) {
+    convertPullRequestToDraft(input: { pullRequestId: $pullRequestId }) {
+      pullRequest {
+        id
+        isDraft
+      }
+    }
+  }
+`;
+
+export const MARK_READY_MUTATION = /* GraphQL */ `
+  mutation MarkReady($pullRequestId: ID!) {
+    markPullRequestReadyForReview(input: { pullRequestId: $pullRequestId }) {
+      pullRequest {
+        id
+        isDraft
+      }
+    }
+  }
+`;
+
+/**
+ * Flip a PR between draft and ready-for-review. GitHub splits this
+ * across two mutations that take identical input, so one function with
+ * a boolean beats two near-identical exports. `pullRequestId` is the
+ * GraphQL node id carried on every DashboardPR (`pr.id`). Throws on
+ * GraphQL/HTTP error; callers surface it (redacting the PAT first).
+ *
+ * Converting to draft makes GitHub dismiss the PR's pending review
+ * requests — the caller warns before doing it.
+ */
+export async function setDraftState(
+  token: string,
+  pullRequestId: string,
+  draft: boolean,
+): Promise<void> {
+  const client = createClient(token);
+  await client.request(draft ? CONVERT_TO_DRAFT_MUTATION : MARK_READY_MUTATION, {
+    pullRequestId,
+  });
+}
+
 /** Build a GitHub search query that returns open PRs across the given orgs. */
 export function buildTeamSearchQuery(orgs: string[]): string {
   const cleaned = orgs
