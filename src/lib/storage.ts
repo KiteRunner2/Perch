@@ -3,9 +3,28 @@ const THEME_KEY = 'perch.theme';
 const SCOPE_KEY = 'perch.scope';
 const ORGS_KEY = 'perch.orgs';
 const NOTIFICATIONS_KEY = 'perch.notifications';
+const DIFF_MAXIMIZED_KEY = 'perch.diff.maximized';
+const DIFF_FONT_SIZE_KEY = 'perch.diff.fontSize';
+const DIFF_RAIL_OPEN_KEY = 'perch.diff.railOpen';
 
 export type Theme = 'dark' | 'light';
 export type Scope = 'inbox' | 'all';
+
+/** Diff type size bounds. Below 11 the gutter numbers stop being legible;
+ *  above 16 the fixed 40px line-number columns start clipping. */
+export const DIFF_FONT_MIN = 11;
+export const DIFF_FONT_MAX = 16;
+export const DIFF_FONT_DEFAULT = 13;
+
+export function clampDiffFontSize(size: number): number {
+  if (!Number.isFinite(size)) return DIFF_FONT_DEFAULT;
+  return Math.min(DIFF_FONT_MAX, Math.max(DIFF_FONT_MIN, Math.round(size)));
+}
+
+/** Line height that keeps the shipped 11.5/18 rhythm as type scales up. */
+export function diffLineHeight(fontSize: number): number {
+  return fontSize + 8;
+}
 
 export const storage = {
   getToken(): string | null {
@@ -59,6 +78,39 @@ export const storage = {
   },
   setNotifications(enabled: boolean): void {
     localStorage.setItem(NOTIFICATIONS_KEY, enabled ? 'true' : 'false');
+  },
+  getDiffMaximized(): boolean {
+    try {
+      return localStorage.getItem(DIFF_MAXIMIZED_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  },
+  setDiffMaximized(maximized: boolean): void {
+    localStorage.setItem(DIFF_MAXIMIZED_KEY, maximized ? 'true' : 'false');
+  },
+  getDiffFontSize(): number {
+    try {
+      const raw = localStorage.getItem(DIFF_FONT_SIZE_KEY);
+      if (raw == null) return DIFF_FONT_DEFAULT;
+      return clampDiffFontSize(Number(raw));
+    } catch {
+      return DIFF_FONT_DEFAULT;
+    }
+  },
+  setDiffFontSize(size: number): void {
+    localStorage.setItem(DIFF_FONT_SIZE_KEY, String(clampDiffFontSize(size)));
+  },
+  getDiffRailOpen(): boolean {
+    // Defaults to open: an unset key must not read as "collapsed".
+    try {
+      return localStorage.getItem(DIFF_RAIL_OPEN_KEY) !== 'false';
+    } catch {
+      return true;
+    }
+  },
+  setDiffRailOpen(open: boolean): void {
+    localStorage.setItem(DIFF_RAIL_OPEN_KEY, open ? 'true' : 'false');
   },
 };
 

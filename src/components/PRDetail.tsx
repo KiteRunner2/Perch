@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   X,
   ExternalLink,
@@ -6,10 +6,16 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Loader2,
   RotateCw,
   Send,
   PenLine,
+  Maximize2,
+  Minimize2,
+  PanelLeft,
+  MessageSquare,
 } from 'lucide-react';
 import { formatDistanceToNowStrict } from 'date-fns';
 import ReactMarkdown from 'react-markdown';
@@ -21,12 +27,13 @@ import {
   LabelPill,
   TONE_STYLE,
 } from './primitives';
-import { DiffTab } from './DiffTab';
+import { DiffTab, prefersReducedMotion } from './DiffTab';
 import { useSubmitReview } from '../hooks/useSubmitReview';
 import { useRerunPipeline } from '../hooks/useRerunPipeline';
 import { useSetDraftState } from '../hooks/useSetDraftState';
+import { isEditableTarget } from '../hooks/useKeyboardNav';
 import { reviewActionEnabled, type ReviewEvent } from '../lib/reviewActions';
-import { redactToken } from '../lib/storage';
+import { DIFF_FONT_MAX, DIFF_FONT_MIN, redactToken } from '../lib/storage';
 import { useUIStore } from '../store';
 
 interface Props {
@@ -50,9 +57,13 @@ type DrawerTab = 'timeline' | 'diff';
 // readability — since the modal floats over the bucket list with a
 // dim backdrop, we don't need to leave horizontal room behind it.
 // Caps at 1100px wide / 92vh tall, scales down to 92vw / 92vh on
-// smaller monitors.
+// smaller monitors. Maximized, it drops the cap and fills the viewport
+// bar a 2vh/2vw gutter, which is where the diff becomes properly
+// readable on a large display.
 const MODAL_WIDTH = 'min(1100px, 92vw)';
 const MODAL_HEIGHT = 'min(900px, 92vh)';
+const MODAL_WIDTH_MAX = 'min(1720px, 96vw)';
+const MODAL_HEIGHT_MAX = '96vh';
 
 export function PRDetail({
   pr,
@@ -64,6 +75,33 @@ export function PRDetail({
   onNavigate,
 }: Props) {
   const [activeTab, setActiveTab] = useState<DrawerTab>('timeline');
+  // Deliberately unpersisted: chrome you popped open for one PR
+  // shouldn't still be open on the next one.
+  const [detailsExpanded, setDetailsExpanded] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [armedVerdict, setArmedVerdict] = useState<ReviewEvent | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // j/k navigation swaps `pr` in place rather than remounting, so the
+  // collapsible chrome has to be reset by hand — otherwise you land on
+  // the next PR with someone else's Approve still armed.
+  useEffect(() => {
+    setDetailsExpanded(false);
+    setReviewOpen(false);
+    setArmedVerdict(null);
+  }, [pr.id]);
+
+  const maximized = useUIStore((s) => s.diffMaximized);
+  const toggleMaximized = useUIStore((s) => s.toggleDiffMaximized);
+  const railOpen = useUIStore((s) => s.diffRailOpen);
+  const toggleRail = useUIStore((s) => s.toggleDiffRail);
+  const fontSize = useUIStore((s) => s.diffFontSize);
+  const adjustFontSize = useUIStore((s) => s.adjustDiffFontSize);
+
+  const isDiff = activeTab === 'diff';
+  // On the Diff tab the composer is collapsed behind "Review ▾"; on the
+  // Timeline tab it stays open, as it always has.
+  const composerOpen = !isDiff || reviewOpen;
 
   const mergeableTone =
     pr.mergeable === 'MERGEABLE'
@@ -71,6 +109,76 @@ export function PRDetail({
       : pr.mergeable === 'CONFLICTING'
         ? 'err'
         : 'warn';
+
+  // Open + focus the composer with a verdict pre-selected. Deliberately
+  // does *not* submit: an approval is public and notifies people, so a
+  // bare keystroke arms the button rather than pressing it.
+  function armReview(event: ReviewEvent): void {
+    if (pr.isMerged) return;
+    // Mirror reviewActionEnabled's authorship rule — no point arming a
+    // verdict GitHub would reject.
+    if (pr.viewerIsAuthor && event !== 'COMMENT') return;
+    setReviewOpen(true);
+    setArmedVerdict(event);
+    requestAnimationFrame(() => composerRef.current?.focus());
+  }
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent): void {
+      // Maximize carries a modifier so it can fire even mid-sentence in
+      // the composer, and so it never collides with the global handler
+      // (which bails on meta/ctrl).
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
+        toggleMaximized();
+        e.preventDefault();
+        return;
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (isEditableTarget(e.target)) return;
+
+      if (isDiff) {
+        switch (e.key) {
+          case '[':
+            toggleRail();
+            e.preventDefault();
+            return;
+          case '+':
+          case '=':
+            adjustFontSize(1);
+            e.preventDefault();
+            return;
+          case '-':
+            adjustFontSize(-1);
+            e.preventDefault();
+            return;
+          default:
+            break;
+        }
+      }
+
+      switch (e.key) {
+        case 'a':
+          armReview('APPROVE');
+          e.preventDefault();
+          break;
+        // Shift+R, not `r` — plain `r` is the global manual refresh.
+        case 'R':
+          armReview('REQUEST_CHANGES');
+          e.preventDefault();
+          break;
+        case 'c':
+          armReview('COMMENT');
+          e.preventDefault();
+          break;
+        default:
+          break;
+      }
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  });
+
+  const reduceMotion = prefersReducedMotion();
 
   return (
     <div
@@ -85,7 +193,9 @@ export function PRDetail({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 24,
+        // A 24px gutter would overflow a 96vh panel; when maximized the
+        // panel's own vh sizing provides the breathing room.
+        padding: maximized ? 0 : 24,
       }}
     >
       <aside
@@ -96,8 +206,8 @@ export function PRDetail({
         // and triggering close.
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: MODAL_WIDTH,
-          height: MODAL_HEIGHT,
+          width: maximized ? MODAL_WIDTH_MAX : MODAL_WIDTH,
+          height: maximized ? MODAL_HEIGHT_MAX : MODAL_HEIGHT,
           background: 'var(--bg-1)',
           border: '1px solid var(--line-2)',
           borderRadius: 10,
@@ -105,6 +215,9 @@ export function PRDetail({
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
+          transition: reduceMotion
+            ? undefined
+            : 'width 120ms ease, height 120ms ease',
         }}
       >
       <div
@@ -133,6 +246,23 @@ export function PRDetail({
             onNavigate={onNavigate}
           />
         )}
+        {/* Diff view controls — only meaningful while reading code. */}
+        {isDiff && (
+          <>
+            <FontStepper size={fontSize} onAdjust={adjustFontSize} />
+            <IconToggle
+              on={!railOpen}
+              onClick={toggleRail}
+              label={railOpen ? 'Hide file rail ([)' : 'Show file rail ([)'}
+            >
+              <PanelLeft size={13} />
+            </IconToggle>
+            <span
+              aria-hidden
+              style={{ width: 1, height: 18, background: 'var(--line-2)' }}
+            />
+          </>
+        )}
         <a
           href={pr.url}
           target="_blank"
@@ -154,164 +284,37 @@ export function PRDetail({
           Open
         </a>
         <button
+          onClick={toggleMaximized}
+          aria-label={maximized ? 'Restore size' : 'Maximize'}
+          aria-pressed={maximized}
+          title={maximized ? 'Restore (⇧⌘F)' : 'Maximize (⇧⌘F)'}
+          style={headerIconBtnStyle}
+        >
+          {maximized ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+        </button>
+        <button
           onClick={onClose}
           aria-label="Close"
           title="Close (Esc)"
-          style={{
-            height: 24,
-            width: 24,
-            borderRadius: 4,
-            border: 'none',
-            background: 'transparent',
-            color: 'var(--fg-2)',
-            cursor: 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
+          style={headerIconBtnStyle}
         >
           <X size={14} />
         </button>
       </div>
 
-      <div
-        style={{
-          padding: '16px 18px 14px 18px',
-          borderBottom: '1px solid var(--line-1)',
-        }}
-      >
-        <h2
-          style={{
-            margin: 0,
-            fontSize: 16,
-            fontWeight: 600,
-            letterSpacing: '-0.015em',
-            color: 'var(--fg-0)',
-            lineHeight: 1.35,
-          }}
-        >
-          {pr.title}
-        </h2>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            marginTop: 10,
-            flexWrap: 'wrap',
-          }}
-        >
-          <Avatar user={pr.author} size={18} />
-          <span style={{ fontSize: 12, color: 'var(--fg-1)' }}>
-            <span style={{ fontWeight: 500 }}>@{pr.author.login}</span>
-            <span style={{ color: 'var(--fg-3)' }}> opened </span>
-            <span className="mono" style={{ color: 'var(--fg-1)' }}>
-              {formatDistanceToNowStrict(new Date(pr.createdAt), { addSuffix: true })}
-            </span>
-          </span>
-          {pr.isDraft && <DraftChip />}
-        </div>
-
-        <BranchLine head={pr.headRefName} base={pr.baseRefName} />
-
-        <PRUrlLine url={pr.url} />
-
-        {pr.labels.length > 0 && (
-          <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {pr.labels.map((l, i) => (
-              <LabelPill key={`${l.name}-${i}`} label={l} />
-            ))}
-          </div>
-        )}
-
-        <div
-          style={{
-            marginTop: 14,
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr 1fr',
-            gap: 8,
-          }}
-        >
-          <StatusCard
-            label="Approval"
-            tone={pr.approvalState === 'approved' ? 'ok' : pr.approvalState === 'changes' ? 'err' : 'warn'}
-            value={
-              pr.approvalState === 'changes'
-                ? 'Changes requested'
-                : pr.approvalState === 'approved'
-                  ? `${pr.approvalCount}/${Math.max(pr.reviewerCount, pr.approvalCount)} approved`
-                  : `${pr.approvalCount}/${Math.max(pr.reviewerCount, pr.approvalCount) || '—'} approvals`
-            }
-            sub={
-              pr.reviewers[0]
-                ? `latest: @${pr.reviewers[0].login}`
-                : 'no reviews yet'
-            }
-          />
-          <StatusCard
-            label="CI"
-            tone={
-              pr.ciStatus === 'success'
-                ? 'ok'
-                : pr.ciStatus === 'failure'
-                  ? 'err'
-                  : pr.ciStatus === 'pending'
-                    ? 'warn'
-                    : 'neutral'
-            }
-            value={
-              pr.ciStatus === 'success'
-                ? 'Passing'
-                : pr.ciStatus === 'failure'
-                  ? 'Failing'
-                  : pr.ciStatus === 'pending'
-                    ? 'Running'
-                    : 'No checks'
-            }
-            sub=""
-          />
-          <StatusCard
-            label="Mergeable"
-            tone={mergeableTone}
-            value={
-              pr.mergeable === 'MERGEABLE'
-                ? 'Clean'
-                : pr.mergeable === 'CONFLICTING'
-                  ? 'Conflicts'
-                  : 'Unknown'
-            }
-            sub=""
-          />
-        </div>
-
-        {/* File stats strip — matches design's slim mono row. */}
-        <div
-          style={{
-            marginTop: 12,
-            display: 'flex',
-            gap: 16,
-            alignItems: 'center',
-            fontSize: 11.5,
-            color: 'var(--fg-2)',
-            fontFamily: 'var(--font-mono)',
-          }}
-        >
-          <span>
-            {pr.changedFiles} {pr.changedFiles === 1 ? 'file' : 'files'}
-          </span>
-          <span style={{ color: 'var(--ok)' }}>+{pr.additions}</span>
-          <span style={{ color: 'var(--err)' }}>−{pr.deletions}</span>
-          <span style={{ flex: 1 }} />
-          <span>
-            {pr.commitCount}{' '}
-            {pr.commitCount === 1 ? 'commit' : 'commits'}
-          </span>
-          <span>
-            {pr.reviewers.length}{' '}
-            {pr.reviewers.length === 1 ? 'reviewer' : 'reviewers'}
-          </span>
-        </div>
-      </div>
+      {/* On the Diff tab the ~200px info block collapses to a one-line
+          context strip — everything you need to hold in mind while
+          reading code, and ~160px handed back to the diff. */}
+      {isDiff && (
+        <PRContextStrip
+          pr={pr}
+          expanded={detailsExpanded}
+          onToggle={() => setDetailsExpanded((v) => !v)}
+        />
+      )}
+      {(!isDiff || detailsExpanded) && (
+        <PRInfoBlock pr={pr} mergeableTone={mergeableTone} />
+      )}
 
       <TabStrip
         activeTab={activeTab}
@@ -397,7 +400,7 @@ export function PRDetail({
 
       <div
         style={{
-          padding: 10,
+          padding: isDiff ? '8px 16px' : 10,
           borderTop: '1px solid var(--line-1)',
           background: 'var(--bg-2)',
           display: 'flex',
@@ -405,51 +408,561 @@ export function PRDetail({
           gap: 10,
         }}
       >
-        <ReviewComposer key={pr.id} pr={pr} />
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <a
-            href={pr.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              height: 30,
-              padding: '0 12px',
-              borderRadius: 6,
-              background: 'var(--accent)',
-              color: 'var(--accent-fg)',
-              fontSize: 12,
-              fontWeight: 600,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 7,
-              textDecoration: 'none',
-            }}
-          >
-            <ExternalLink size={12} />
-            Open on GitHub
-          </a>
-          <RerunButton key={pr.id} pr={pr} />
-          <DraftToggleButton key={`draft-${pr.id}`} pr={pr} />
-          <span style={{ flex: 1 }} />
-          <button
-            onClick={onClose}
-            style={{
-              height: 30,
-              padding: '0 10px',
-              borderRadius: 6,
-              border: '1px solid var(--line-2)',
-              background: 'var(--bg-1)',
-              color: 'var(--fg-1)',
-              cursor: 'pointer',
-              fontSize: 12,
-            }}
-          >
-            Close
-          </button>
-        </div>
+        {composerOpen && (
+          <ReviewComposer
+            key={pr.id}
+            pr={pr}
+            armed={armedVerdict}
+            onArm={setArmedVerdict}
+            textareaRef={composerRef}
+          />
+        )}
+        {isDiff ? (
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            {!pr.isMerged && (
+              <button
+                onClick={() => {
+                  setReviewOpen((v) => !v);
+                  if (!reviewOpen) {
+                    requestAnimationFrame(() => composerRef.current?.focus());
+                  }
+                }}
+                aria-expanded={reviewOpen}
+                style={{
+                  height: 30,
+                  padding: '0 12px',
+                  borderRadius: 6,
+                  border: '1px solid var(--line-2)',
+                  background: 'var(--bg-1)',
+                  color: 'var(--fg-1)',
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 7,
+                }}
+              >
+                <MessageSquare size={12} aria-hidden />
+                Review
+                {reviewOpen ? (
+                  <ChevronDown size={11} aria-hidden />
+                ) : (
+                  <ChevronUp size={11} aria-hidden />
+                )}
+              </button>
+            )}
+            {!pr.isMerged && <ReviewHint viewerIsAuthor={pr.viewerIsAuthor} />}
+            <span style={{ flex: 1 }} />
+            <OpenOnGitHub url={pr.url} />
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <OpenOnGitHub url={pr.url} />
+            <RerunButton key={pr.id} pr={pr} />
+            <DraftToggleButton key={`draft-${pr.id}`} pr={pr} />
+            <span style={{ flex: 1 }} />
+            <button
+              onClick={onClose}
+              style={{
+                height: 30,
+                padding: '0 10px',
+                borderRadius: 6,
+                border: '1px solid var(--line-2)',
+                background: 'var(--bg-1)',
+                color: 'var(--fg-1)',
+                cursor: 'pointer',
+                fontSize: 12,
+              }}
+            >
+              Close
+            </button>
+          </div>
+        )}
       </div>
       </aside>
     </div>
+  );
+}
+
+function OpenOnGitHub({ url }: { url: string }) {
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{
+        height: 30,
+        padding: '0 12px',
+        borderRadius: 6,
+        background: 'var(--accent)',
+        color: 'var(--accent-fg)',
+        fontSize: 12,
+        fontWeight: 600,
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 7,
+        textDecoration: 'none',
+        flexShrink: 0,
+      }}
+    >
+      <ExternalLink size={12} />
+      Open on GitHub
+    </a>
+  );
+}
+
+/** Slim-footer keyboard hint. Approve / request-changes are dead keys on
+ *  your own PR, so the hint shrinks to what actually works. */
+function ReviewHint({ viewerIsAuthor }: { viewerIsAuthor: boolean }) {
+  const keyStyle: React.CSSProperties = {
+    color: 'var(--fg-1)',
+    fontFamily: 'var(--font-mono)',
+  };
+  return (
+    <span
+      style={{
+        fontSize: 11,
+        color: 'var(--fg-3)',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+      }}
+    >
+      Press{' '}
+      {!viewerIsAuthor && (
+        <>
+          <span style={keyStyle}>a</span> approve ·{' '}
+          <span style={keyStyle}>⇧R</span> request changes ·{' '}
+        </>
+      )}
+      <span style={keyStyle}>c</span> comment
+    </span>
+  );
+}
+
+const headerIconBtnStyle: React.CSSProperties = {
+  height: 24,
+  width: 24,
+  borderRadius: 4,
+  border: 'none',
+  background: 'transparent',
+  color: 'var(--fg-2)',
+  cursor: 'pointer',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+};
+
+/** The full ~200px PR summary. Always on Timeline; opt-in on Diff. */
+function PRInfoBlock({
+  pr,
+  mergeableTone,
+}: {
+  pr: DashboardPR;
+  mergeableTone: keyof typeof TONE_STYLE;
+}) {
+  return (
+    <div
+      style={{
+        padding: '16px 18px 14px 18px',
+        borderBottom: '1px solid var(--line-1)',
+      }}
+    >
+      <h2
+        style={{
+          margin: 0,
+          fontSize: 16,
+          fontWeight: 600,
+          letterSpacing: '-0.015em',
+          color: 'var(--fg-0)',
+          lineHeight: 1.35,
+        }}
+      >
+        {pr.title}
+      </h2>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          marginTop: 10,
+          flexWrap: 'wrap',
+        }}
+      >
+        <Avatar user={pr.author} size={18} />
+        <span style={{ fontSize: 12, color: 'var(--fg-1)' }}>
+          <span style={{ fontWeight: 500 }}>@{pr.author.login}</span>
+          <span style={{ color: 'var(--fg-3)' }}> opened </span>
+          <span className="mono" style={{ color: 'var(--fg-1)' }}>
+            {formatDistanceToNowStrict(new Date(pr.createdAt), { addSuffix: true })}
+          </span>
+        </span>
+        {pr.isDraft && <DraftChip />}
+      </div>
+
+      <BranchLine head={pr.headRefName} base={pr.baseRefName} />
+
+      <PRUrlLine url={pr.url} />
+
+      {pr.labels.length > 0 && (
+        <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {pr.labels.map((l, i) => (
+            <LabelPill key={`${l.name}-${i}`} label={l} />
+          ))}
+        </div>
+      )}
+
+      <div
+        style={{
+          marginTop: 14,
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr 1fr',
+          gap: 8,
+        }}
+      >
+        <StatusCard
+          label="Approval"
+          tone={approvalTone(pr)}
+          value={approvalValue(pr)}
+          sub={
+            pr.reviewers[0]
+              ? `latest: @${pr.reviewers[0].login}`
+              : 'no reviews yet'
+          }
+        />
+        <StatusCard label="CI" tone={ciTone(pr)} value={ciValue(pr)} sub="" />
+        <StatusCard
+          label="Mergeable"
+          tone={mergeableTone}
+          value={mergeableValue(pr)}
+          sub=""
+        />
+      </div>
+
+      {/* File stats strip — matches design's slim mono row. */}
+      <div
+        style={{
+          marginTop: 12,
+          display: 'flex',
+          gap: 16,
+          alignItems: 'center',
+          fontSize: 11.5,
+          color: 'var(--fg-2)',
+          fontFamily: 'var(--font-mono)',
+        }}
+      >
+        <span>
+          {pr.changedFiles} {pr.changedFiles === 1 ? 'file' : 'files'}
+        </span>
+        <span style={{ color: 'var(--ok)' }}>+{pr.additions}</span>
+        <span style={{ color: 'var(--err)' }}>−{pr.deletions}</span>
+        <span style={{ flex: 1 }} />
+        <span>
+          {pr.commitCount} {pr.commitCount === 1 ? 'commit' : 'commits'}
+        </span>
+        <span>
+          {pr.reviewers.length}{' '}
+          {pr.reviewers.length === 1 ? 'reviewer' : 'reviewers'}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// Status derivations shared by the full info block's cards and the
+// context strip's dots, so the two can never disagree.
+function approvalTone(pr: DashboardPR): keyof typeof TONE_STYLE {
+  return pr.approvalState === 'approved'
+    ? 'ok'
+    : pr.approvalState === 'changes'
+      ? 'err'
+      : 'warn';
+}
+
+function approvalValue(pr: DashboardPR): string {
+  if (pr.approvalState === 'changes') return 'Changes requested';
+  const denom = Math.max(pr.reviewerCount, pr.approvalCount);
+  if (pr.approvalState === 'approved') {
+    return `${pr.approvalCount}/${denom} approved`;
+  }
+  return `${pr.approvalCount}/${denom || '—'} approvals`;
+}
+
+/** Terse enough for the one-line strip. */
+function approvalShort(pr: DashboardPR): string {
+  if (pr.approvalState === 'changes') return 'Changes';
+  const denom = Math.max(pr.reviewerCount, pr.approvalCount);
+  if (pr.approvalState === 'approved') return 'Approved';
+  return `${pr.approvalCount}/${denom || '—'}`;
+}
+
+function ciTone(pr: DashboardPR): keyof typeof TONE_STYLE {
+  return pr.ciStatus === 'success'
+    ? 'ok'
+    : pr.ciStatus === 'failure'
+      ? 'err'
+      : pr.ciStatus === 'pending'
+        ? 'warn'
+        : 'neutral';
+}
+
+function ciValue(pr: DashboardPR): string {
+  return pr.ciStatus === 'success'
+    ? 'Passing'
+    : pr.ciStatus === 'failure'
+      ? 'Failing'
+      : pr.ciStatus === 'pending'
+        ? 'Running'
+        : 'No checks';
+}
+
+function mergeableValue(pr: DashboardPR): string {
+  return pr.mergeable === 'MERGEABLE'
+    ? 'Clean'
+    : pr.mergeable === 'CONFLICTING'
+      ? 'Conflicts'
+      : 'Unknown';
+}
+
+/** One-line replacement for the info block while the Diff tab is up. */
+function PRContextStrip({
+  pr,
+  expanded,
+  onToggle,
+}: {
+  pr: DashboardPR;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div
+      style={{
+        padding: '9px 16px',
+        borderBottom: '1px solid var(--line-1)',
+        background: 'var(--bg-1)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 14,
+        minWidth: 0,
+      }}
+    >
+      <Avatar user={pr.author} size={18} />
+      <span
+        title={pr.title}
+        style={{
+          fontSize: 13,
+          fontWeight: 600,
+          color: 'var(--fg-0)',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          minWidth: 0,
+          maxWidth: 340,
+        }}
+      >
+        {pr.title}
+      </span>
+      <span
+        className="mono"
+        style={{ fontSize: 11, color: 'var(--fg-3)', flexShrink: 0 }}
+      >
+        {pr.headRefName} → {pr.baseRefName}
+      </span>
+      <span style={{ flexShrink: 0, display: 'inline-flex', gap: 12 }}>
+        <span className="mono" style={{ fontSize: 11.5, color: 'var(--ok)' }}>
+          +{pr.additions}
+        </span>
+        <span className="mono" style={{ fontSize: 11.5, color: 'var(--err)' }}>
+          −{pr.deletions}
+        </span>
+      </span>
+      <span
+        aria-hidden
+        style={{
+          width: 1,
+          height: 16,
+          background: 'var(--line-2)',
+          flexShrink: 0,
+        }}
+      />
+      <span style={{ display: 'inline-flex', gap: 14, flexShrink: 0 }}>
+        <StatusDot tone={approvalTone(pr)} label={approvalShort(pr)} />
+        <StatusDot tone={ciTone(pr)} label={ciValue(pr)} />
+        <StatusDot
+          tone={
+            pr.mergeable === 'MERGEABLE'
+              ? 'ok'
+              : pr.mergeable === 'CONFLICTING'
+                ? 'err'
+                : 'warn'
+          }
+          label={mergeableValue(pr)}
+        />
+      </span>
+      <span style={{ flex: 1 }} />
+      <button
+        onClick={onToggle}
+        aria-expanded={expanded}
+        title={expanded ? 'Hide full PR details' : 'Show full PR details'}
+        style={{
+          height: 24,
+          padding: '0 8px',
+          borderRadius: 5,
+          border: '1px solid var(--line-2)',
+          background: 'var(--bg-2)',
+          color: 'var(--fg-2)',
+          cursor: 'pointer',
+          fontSize: 11,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 5,
+          flexShrink: 0,
+        }}
+      >
+        Details
+        {expanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+      </button>
+    </div>
+  );
+}
+
+function StatusDot({
+  tone,
+  label,
+}: {
+  tone: keyof typeof TONE_STYLE;
+  label: string;
+}) {
+  const t = TONE_STYLE[tone];
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+      <span
+        aria-hidden
+        style={{
+          width: 7,
+          height: 7,
+          borderRadius: '50%',
+          background: t.c,
+          boxShadow: `0 0 0 3px ${t.b}`,
+          flexShrink: 0,
+        }}
+      />
+      <span style={{ fontSize: 11.5, color: t.c, fontWeight: 500 }}>
+        {label}
+      </span>
+    </span>
+  );
+}
+
+/** `A− 13 A+` segmented control for the diff type size. */
+function FontStepper({
+  size,
+  onAdjust,
+}: {
+  size: number;
+  onAdjust: (delta: number) => void;
+}) {
+  const atMin = size <= DIFF_FONT_MIN;
+  const atMax = size >= DIFF_FONT_MAX;
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        height: 24,
+        borderRadius: 5,
+        border: '1px solid var(--line-2)',
+        background: 'var(--bg-2)',
+        overflow: 'hidden',
+      }}
+    >
+      <button
+        onClick={() => onAdjust(-1)}
+        disabled={atMin}
+        title="Smaller diff type (−)"
+        aria-label="Decrease diff font size"
+        style={stepBtnStyle(atMin)}
+      >
+        A<span style={{ fontSize: 8 }}>−</span>
+      </button>
+      <span
+        className="mono num"
+        aria-live="polite"
+        style={{
+          fontSize: 10.5,
+          color: 'var(--fg-2)',
+          padding: '0 6px',
+          borderLeft: '1px solid var(--line-1)',
+          borderRight: '1px solid var(--line-1)',
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        {size}
+      </span>
+      <button
+        onClick={() => onAdjust(1)}
+        disabled={atMax}
+        title="Bigger diff type (+)"
+        aria-label="Increase diff font size"
+        style={stepBtnStyle(atMax)}
+      >
+        A<span style={{ fontSize: 11 }}>+</span>
+      </button>
+    </span>
+  );
+}
+
+function stepBtnStyle(disabled: boolean): React.CSSProperties {
+  return {
+    height: 22,
+    padding: '0 7px',
+    border: 'none',
+    background: 'transparent',
+    color: 'var(--fg-1)',
+    cursor: disabled ? 'default' : 'pointer',
+    opacity: disabled ? 0.4 : 1,
+    fontSize: 11,
+    fontWeight: 600,
+    display: 'inline-flex',
+    alignItems: 'baseline',
+    gap: 1,
+    fontFamily: 'var(--font-sans)',
+  };
+}
+
+function IconToggle({
+  on,
+  onClick,
+  label,
+  children,
+}: {
+  on: boolean;
+  onClick: () => void;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      aria-pressed={on}
+      style={{
+        height: 24,
+        width: 26,
+        borderRadius: 5,
+        border: `1px solid ${on ? 'var(--accent)' : 'var(--line-2)'}`,
+        background: on ? 'var(--accent)' : 'var(--bg-2)',
+        color: on ? 'var(--accent-fg)' : 'var(--fg-2)',
+        cursor: 'pointer',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -1349,7 +1862,18 @@ const VERDICTS: { event: ReviewEvent; label: string; tone: 'ok' | 'err' | 'neutr
   { event: 'COMMENT', label: 'Comment', tone: 'neutral' },
 ];
 
-function ReviewComposer({ pr }: { pr: DashboardPR }) {
+function ReviewComposer({
+  pr,
+  armed,
+  onArm,
+  textareaRef,
+}: {
+  pr: DashboardPR;
+  /** Verdict pre-selected by `a` / `⇧R` / `c`, submitted on ⌘↵. */
+  armed: ReviewEvent | null;
+  onArm: (event: ReviewEvent | null) => void;
+  textareaRef: React.RefObject<HTMLTextAreaElement>;
+}) {
   const [body, setBody] = useState('');
   const token = useUIStore((s) => s.token);
   const mutation = useSubmitReview();
@@ -1364,8 +1888,23 @@ function ReviewComposer({ pr }: { pr: DashboardPR }) {
   function submit(event: ReviewEvent) {
     mutation.mutate(
       { pullRequestId: pr.id, event, body },
-      { onSuccess: () => setBody('') },
+      {
+        onSuccess: () => {
+          setBody('');
+          onArm(null);
+        },
+      },
     );
+  }
+
+  // ⌘↵ / Ctrl↵ fires the armed verdict. Plain ↵ has to keep inserting a
+  // newline — this is a comment box first.
+  function onTextareaKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (!(e.metaKey || e.ctrlKey) || e.key !== 'Enter') return;
+    const event = armed ?? 'COMMENT';
+    if (pending || !reviewActionEnabled(event, body, pr.viewerIsAuthor)) return;
+    submit(event);
+    e.preventDefault();
   }
 
   // Redact the PAT from any error before display, then add a friendly
@@ -1383,10 +1922,12 @@ function ReviewComposer({ pr }: { pr: DashboardPR }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <textarea
+        ref={textareaRef}
         value={body}
         onChange={(e) => setBody(e.target.value)}
+        onKeyDown={onTextareaKeyDown}
         aria-label="Review comment"
-        placeholder="Leave a review comment (optional for Approve)…"
+        placeholder="Leave a review comment (optional for Approve)… ⌘↵ to submit"
         rows={2}
         disabled={pending}
         style={{
@@ -1434,13 +1975,21 @@ function ReviewComposer({ pr }: { pr: DashboardPR }) {
               onClick={() => submit(event)}
               disabled={!enabled}
               title={title}
-              style={verdictBtnStyle(tone, enabled)}
+              style={verdictBtnStyle(tone, enabled, armed === event)}
             >
               {isActive && <Loader2 size={12} className="spin" aria-hidden />}
               {label}
             </button>
           );
         })}
+        {armed && (
+          <span style={{ fontSize: 11, color: 'var(--fg-3)' }}>
+            <span className="mono" style={{ color: 'var(--fg-1)' }}>
+              ⌘↵
+            </span>{' '}
+            to submit
+          </span>
+        )}
       </div>
     </div>
   );
@@ -1449,16 +1998,24 @@ function ReviewComposer({ pr }: { pr: DashboardPR }) {
 function verdictBtnStyle(
   tone: 'ok' | 'err' | 'neutral',
   enabled: boolean,
+  armed: boolean,
 ): React.CSSProperties {
   const color =
     tone === 'ok' ? 'var(--ok)' : tone === 'err' ? 'var(--err)' : 'var(--fg-1)';
   const border = tone === 'neutral' ? 'var(--line-2)' : color;
+  const toneBg =
+    tone === 'ok'
+      ? 'var(--ok-bg)'
+      : tone === 'err'
+        ? 'var(--err-bg)'
+        : 'var(--bg-3)';
   return {
     height: 30,
     padding: '0 12px',
     borderRadius: 6,
     border: `1px solid ${border}`,
-    background: 'var(--bg-1)',
+    background: armed ? toneBg : 'var(--bg-1)',
+    boxShadow: armed ? `0 0 0 1px ${border}` : undefined,
     color,
     fontSize: 12,
     fontWeight: 600,

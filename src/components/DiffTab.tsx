@@ -18,8 +18,23 @@ import type {
 import type { DashboardPR, TimelineEvent } from '../types/dashboard';
 import { Avatar } from './primitives';
 import { usePRDiff } from '../hooks/usePRDiff';
+import { isEditableTarget } from '../hooks/useKeyboardNav';
 import { useUIStore } from '../store';
+import { diffLineHeight } from '../lib/storage';
 import { loadViewedFiles, setFileViewed } from '../lib/viewedFiles';
+
+/** Height of the sticky "now viewing" bar that overlays the pane's top. */
+const STICKY_BAR_HEIGHT = 36;
+
+/** Honour the OS "reduce motion" setting for our smooth scrolls. */
+function scrollBehavior(): ScrollBehavior {
+  return prefersReducedMotion() ? 'auto' : 'smooth';
+}
+
+export function prefersReducedMotion(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false;
+}
 
 interface Props {
   pr: DashboardPR;
@@ -96,6 +111,10 @@ function DiffTabBody({
   );
   const [activePath, setActivePath] = useState<string>(() => files[0]!.path);
 
+  const fontSize = useUIStore((s) => s.diffFontSize);
+  const railOpen = useUIStore((s) => s.diffRailOpen);
+  const lineHeight = diffLineHeight(fontSize);
+
   // Ref on the scrolling container so we can compute scroll offsets
   // for click-to-scroll without falling back to `scrollIntoView`,
   // which doesn't account for the sticky file bar at the top of the
@@ -136,23 +155,57 @@ function DiffTabBody({
     });
   };
 
-  // Scroll the pane to a file's card. The sticky bar covers the top
-  // ~36px, so we offset the target's offsetTop by that much.
-  const STICKY_BAR_HEIGHT = 36;
-  const scrollToFile = (path: string): void => {
+  // Scroll the pane so `el` sits just under the sticky bar. Measured
+  // with rects rather than `offsetTop`: nothing between a diff row and
+  // the scroll container is positioned, so `offsetTop` resolves all the
+  // way up to the fixed backdrop and carries the modal's header/info/tab
+  // chrome as a constant error — which now *changes* when the modal
+  // maximizes or the info block collapses.
+  const scrollElementIntoPane = (el: HTMLElement): void => {
     const container = scrollRef.current;
     if (!container) return;
-    const id = `f-${cssIdSafe(path)}`;
-    const el = container.querySelector<HTMLElement>(`[data-file-anchor="${id}"]`);
-    if (!el) return;
+    const delta =
+      el.getBoundingClientRect().top - container.getBoundingClientRect().top;
     suppressSpyRef.current = true;
-    const top = el.offsetTop - STICKY_BAR_HEIGHT;
-    container.scrollTo({ top, behavior: 'smooth' });
+    container.scrollTo({
+      top: container.scrollTop + delta - STICKY_BAR_HEIGHT,
+      behavior: scrollBehavior(),
+    });
     // Release the spy lock after the smooth scroll has had time to
     // settle. 600ms is conservative — most scrolls land in 300ms.
     window.setTimeout(() => {
       suppressSpyRef.current = false;
     }, 600);
+  };
+
+  const scrollToFile = (path: string): void => {
+    const container = scrollRef.current;
+    if (!container) return;
+    const id = `f-${cssIdSafe(path)}`;
+    const el = container.querySelector<HTMLElement>(`[data-file-anchor="${id}"]`);
+    if (el) scrollElementIntoPane(el);
+  };
+
+  // `n` / `p` — hop between inline review threads in document order,
+  // relative to whatever is currently pinned under the sticky bar.
+  const jumpToThread = (dir: 1 | -1): void => {
+    const container = scrollRef.current;
+    if (!container) return;
+    const threads = Array.from(
+      container.querySelectorAll<HTMLElement>('[data-inline-thread]')
+    );
+    if (threads.length === 0) return;
+    const cTop = container.getBoundingClientRect().top;
+    // A thread sitting exactly on the anchor line is "current", not a
+    // target — the 1px slack keeps repeated presses moving.
+    const anchor = STICKY_BAR_HEIGHT + 1;
+    const tops = threads.map((t) => t.getBoundingClientRect().top - cTop);
+    const idx =
+      dir === 1
+        ? tops.findIndex((t) => t > anchor)
+        : tops.reduce((acc, t, i) => (t < anchor - 2 ? i : acc), -1);
+    if (idx < 0) return;
+    scrollElementIntoPane(threads[idx]!);
   };
 
   const handleSelect = (path: string): void => {
@@ -186,9 +239,10 @@ function DiffTabBody({
         );
         let bestPath: string | null = null;
         let bestTop = -Infinity;
-        const cutoff = container.scrollTop + STICKY_BAR_HEIGHT + 4;
+        const cTop = container.getBoundingClientRect().top;
+        const cutoff = STICKY_BAR_HEIGHT + 4;
         for (const c of cards) {
-          const top = c.offsetTop;
+          const top = c.getBoundingClientRect().top - cTop;
           if (top <= cutoff && top > bestTop) {
             bestTop = top;
             bestPath = c.dataset['filePath'] ?? null;
@@ -216,6 +270,27 @@ function DiffTabBody({
     }
   }, [visibleFiles, activePath]);
 
+  // `n` / `p` thread hopping lives here rather than in the global
+  // handler: this body is mounted only while the Diff tab is open and
+  // loaded, which is exactly the scope the shortcut should have, and
+  // the scroll container it needs is a local ref.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent): void {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (isEditableTarget(e.target)) return;
+      if (e.key === 'n') jumpToThread(1);
+      else if (e.key === 'p') jumpToThread(-1);
+      else return;
+      e.preventDefault();
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+    // Bound once: `jumpToThread` reads everything it needs off refs at
+    // call time, so a captured copy never goes stale. Re-binding on the
+    // scroll-spy's renders would churn the listener every frame.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div
       style={{
@@ -230,20 +305,22 @@ function DiffTabBody({
         background: 'var(--bg-0)',
       }}
     >
-      <FilePane
-        files={files}
-        visibleFiles={visibleFiles}
-        activePath={activePath}
-        onSelect={handleSelect}
-        viewedSet={viewedSet}
-        onToggleViewed={toggleViewed}
-        hideGenerated={hideGenerated}
-        onToggleGenerated={() => setHideGenerated((v) => !v)}
-        hiddenCount={hiddenCount}
-        commentCount={(path) =>
-          countCommentsForPath(inlineComments, path)
-        }
-      />
+      {railOpen && (
+        <FilePane
+          files={files}
+          visibleFiles={visibleFiles}
+          activePath={activePath}
+          onSelect={handleSelect}
+          viewedSet={viewedSet}
+          onToggleViewed={toggleViewed}
+          hideGenerated={hideGenerated}
+          onToggleGenerated={() => setHideGenerated((v) => !v)}
+          hiddenCount={hiddenCount}
+          commentCount={(path) =>
+            countCommentsForPath(inlineComments, path)
+          }
+        />
+      )}
 
       <div
         ref={scrollRef}
@@ -270,6 +347,8 @@ function DiffTabBody({
             inlineComments={inlineComments}
             viewed={viewedSet.has(f.path)}
             onToggleViewed={() => toggleViewed(f.path)}
+            fontSize={fontSize}
+            lineHeight={lineHeight}
           />
         ))}
         <DiffFooter
@@ -732,12 +811,16 @@ function FileCard({
   inlineComments,
   viewed,
   onToggleViewed,
+  fontSize,
+  lineHeight,
 }: {
   file: DiffFile;
   prUrl: string;
   inlineComments: Map<string, TimelineEvent[]>;
   viewed: boolean;
   onToggleViewed: () => void;
+  fontSize: number;
+  lineHeight: number;
 }): JSX.Element {
   return (
     <article
@@ -795,7 +878,13 @@ function FileCard({
           }}
         />
       </header>
-      <FileBody file={file} prUrl={prUrl} inlineComments={inlineComments} />
+      <FileBody
+        file={file}
+        prUrl={prUrl}
+        inlineComments={inlineComments}
+        fontSize={fontSize}
+        lineHeight={lineHeight}
+      />
     </article>
   );
 }
@@ -804,10 +893,14 @@ function FileBody({
   file,
   prUrl,
   inlineComments,
+  fontSize,
+  lineHeight,
 }: {
   file: DiffFile;
   prUrl: string;
   inlineComments: Map<string, TimelineEvent[]>;
+  fontSize: number;
+  lineHeight: number;
 }): JSX.Element {
   if (file.binary) {
     return (
@@ -922,6 +1015,8 @@ function FileBody({
           hunk={h}
           path={file.path}
           inlineComments={inlineComments}
+          fontSize={fontSize}
+          lineHeight={lineHeight}
         />
       ))}
     </div>
@@ -934,10 +1029,14 @@ function Hunk({
   hunk,
   path,
   inlineComments,
+  fontSize,
+  lineHeight,
 }: {
   hunk: DiffHunk;
   path: string;
   inlineComments: Map<string, TimelineEvent[]>;
+  fontSize: number;
+  lineHeight: number;
 }): JSX.Element {
   return (
     <div>
@@ -945,7 +1044,8 @@ function Hunk({
         style={{
           padding: '4px 12px 4px 96px',
           fontFamily: 'var(--font-mono)',
-          fontSize: 11,
+          // Trails the code by the same 0.5px the shipped 11.5/11 pair did.
+          fontSize: fontSize - 0.5,
           color: 'var(--fg-3)',
           background: 'var(--bg-2)',
           borderTop: '1px solid var(--line-1)',
@@ -976,7 +1076,7 @@ function Hunk({
         const thread = key ? inlineComments.get(key) : undefined;
         return (
           <div key={i}>
-            <DiffLineEl row={row} />
+            <DiffLineEl row={row} fontSize={fontSize} lineHeight={lineHeight} />
             {thread && thread.length > 0 && <InlineThread events={thread} />}
           </div>
         );
@@ -985,7 +1085,15 @@ function Hunk({
   );
 }
 
-function DiffLineEl({ row }: { row: DiffRow }): JSX.Element {
+function DiffLineEl({
+  row,
+  fontSize,
+  lineHeight,
+}: {
+  row: DiffRow;
+  fontSize: number;
+  lineHeight: number;
+}): JSX.Element {
   const isAdd = row.kind === 'add';
   const isDel = row.kind === 'del';
   const bg = isAdd
@@ -1016,8 +1124,8 @@ function DiffLineEl({ row }: { row: DiffRow }): JSX.Element {
         minWidth: '100%',
         width: 'max-content',
         fontFamily: 'var(--font-mono)',
-        fontSize: 11.5,
-        lineHeight: '18px',
+        fontSize,
+        lineHeight: `${lineHeight}px`,
         background: bg,
       }}
     >
@@ -1068,6 +1176,7 @@ function InlineThread({
 }): JSX.Element {
   return (
     <div
+      data-inline-thread
       style={{
         margin: '4px 12px 8px 96px',
         border: '1px solid var(--line-2)',

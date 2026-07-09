@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { storage, type Scope, type Theme } from './lib/storage';
+import { clampDiffFontSize, storage, type Scope, type Theme } from './lib/storage';
 
 interface UIState {
   token: string | null;
@@ -13,6 +13,12 @@ interface UIState {
   searchQuery: string;
   collapsedBuckets: Set<string>;
   notificationsEnabled: boolean;
+  /** Modal escapes its 1100x900 cap. Persisted — big-diff readers stay big. */
+  diffMaximized: boolean;
+  /** Diff type size in px, clamped to [DIFF_FONT_MIN, DIFF_FONT_MAX]. Persisted. */
+  diffFontSize: number;
+  /** File rail visible in the Diff tab. Persisted. */
+  diffRailOpen: boolean;
   setToken: (token: string | null) => void;
   setTheme: (theme: Theme) => void;
   setScope: (scope: Scope) => void;
@@ -24,6 +30,10 @@ interface UIState {
   setSearchQuery: (q: string) => void;
   toggleBucket: (id: string) => void;
   setNotificationsEnabled: (enabled: boolean) => void;
+  toggleDiffMaximized: () => void;
+  toggleDiffRail: () => void;
+  /** Step the diff font size by `delta`, clamping at both ends. */
+  adjustDiffFontSize: (delta: number) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -37,6 +47,9 @@ export const useUIStore = create<UIState>((set) => ({
   helpOpen: false,
   searchQuery: '',
   notificationsEnabled: storage.getNotifications(),
+  diffMaximized: storage.getDiffMaximized(),
+  diffFontSize: storage.getDiffFontSize(),
+  diffRailOpen: storage.getDiffRailOpen(),
   // Start with "Recently merged" folded since it's historical and not
   // the attention-first signal.
   collapsedBuckets: new Set<string>(['merged']),
@@ -62,6 +75,25 @@ export const useUIStore = create<UIState>((set) => ({
     storage.setOrgs(orgs);
     set({ orgs });
   },
+  toggleDiffMaximized: () =>
+    set((s) => {
+      const diffMaximized = !s.diffMaximized;
+      storage.setDiffMaximized(diffMaximized);
+      return { diffMaximized };
+    }),
+  toggleDiffRail: () =>
+    set((s) => {
+      const diffRailOpen = !s.diffRailOpen;
+      storage.setDiffRailOpen(diffRailOpen);
+      return { diffRailOpen };
+    }),
+  adjustDiffFontSize: (delta) =>
+    set((s) => {
+      const diffFontSize = clampDiffFontSize(s.diffFontSize + delta);
+      if (diffFontSize === s.diffFontSize) return s;
+      storage.setDiffFontSize(diffFontSize);
+      return { diffFontSize };
+    }),
   setSelectedPRId: (id) => set({ selectedPRId: id }),
   setDetailOpen: (open) => set({ detailOpen: open }),
   setSettingsOpen: (open) => set({ settingsOpen: open }),

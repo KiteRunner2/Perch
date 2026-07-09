@@ -9,6 +9,19 @@ interface Options {
 }
 
 /**
+ * True when a keystroke is destined for a text field, so shortcut
+ * handlers can bow out. Shared with the modal-scoped handlers in
+ * PRDetail / DiffTab — the review composer's textarea must be able to
+ * contain the letters `a`, `c`, `n`, `p` without triggering verdicts.
+ */
+export function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  return target.isContentEditable;
+}
+
+/**
  * Global keyboard navigation:
  * - j / k: move selection down / up across flattened PR list
  * - enter: open selected PR in a new tab
@@ -41,14 +54,6 @@ export function useKeyboardNav({ buckets, onRefresh }: Options): void {
       return flatList.findIndex((p) => p.id === selectedPRId);
     }
 
-    function isEditable(target: EventTarget | null): boolean {
-      if (!(target instanceof HTMLElement)) return false;
-      const tag = target.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
-      if (target.isContentEditable) return true;
-      return false;
-    }
-
     function handler(e: KeyboardEvent) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
 
@@ -71,7 +76,7 @@ export function useKeyboardNav({ buckets, onRefresh }: Options): void {
         }
       }
 
-      if (isEditable(e.target)) {
+      if (isEditableTarget(e.target)) {
         return;
       }
 

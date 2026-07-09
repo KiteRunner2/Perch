@@ -14,6 +14,24 @@ const SHORTCUTS: Array<{ keys: string[]; label: string }> = [
   { keys: ['Esc'], label: 'Close drawer / modal' },
 ];
 
+/** Only live while the PR modal is open. */
+const MODAL_SHORTCUTS: Array<{ keys: string[]; label: string }> = [
+  { keys: ['⇧', '⌘', 'F'], label: 'Maximize / restore the modal' },
+  { keys: ['a'], label: 'Arm Approve in the composer' },
+  { keys: ['⇧', 'R'], label: 'Arm Request changes' },
+  { keys: ['c'], label: 'Arm Comment' },
+  { keys: ['⌘', '↵'], label: 'Submit the armed verdict' },
+];
+
+/** Only live on the Diff tab. */
+const DIFF_SHORTCUTS: Array<{ keys: string[]; label: string }> = [
+  { keys: ['['], label: 'Toggle the file rail' },
+  { keys: ['+'], label: 'Bigger diff type' },
+  { keys: ['-'], label: 'Smaller diff type' },
+  { keys: ['n'], label: 'Next inline comment thread' },
+  { keys: ['p'], label: 'Previous inline comment thread' },
+];
+
 export function HelpOverlay() {
   const helpOpen = useUIStore((s) => s.helpOpen);
   const setHelpOpen = useUIStore((s) => s.setHelpOpen);
@@ -80,28 +98,63 @@ export function HelpOverlay() {
             <X size={14} />
           </button>
         </header>
-        <div style={{ padding: 8 }}>
-          {SHORTCUTS.map((s) => (
-            <div
-              key={s.label}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                padding: '6px 10px',
-              }}
-            >
-              <span style={{ fontSize: 12, color: 'var(--fg-1)', flex: 1 }}>
-                {s.label}
-              </span>
-              <span style={{ display: 'inline-flex', gap: 4 }}>
-                {s.keys.map((k, i) => (
-                  <Kbd key={`${k}-${i}`}>{k}</Kbd>
-                ))}
-              </span>
-            </div>
-          ))}
+        <div style={{ padding: 8, maxHeight: '70vh', overflow: 'auto' }}>
+          <ShortcutRows rows={SHORTCUTS} />
+          <GroupLabel>PR modal</GroupLabel>
+          <ShortcutRows rows={MODAL_SHORTCUTS} />
+          <GroupLabel>Diff tab</GroupLabel>
+          <ShortcutRows rows={DIFF_SHORTCUTS} />
         </div>
       </div>
     </div>
+  );
+}
+
+function GroupLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        fontSize: 10,
+        color: 'var(--fg-3)',
+        textTransform: 'uppercase',
+        letterSpacing: '0.08em',
+        fontWeight: 600,
+        padding: '12px 10px 4px 10px',
+        borderTop: '1px solid var(--line-1)',
+        marginTop: 6,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function ShortcutRows({
+  rows,
+}: {
+  rows: Array<{ keys: string[]; label: string }>;
+}) {
+  return (
+    <>
+      {rows.map((s) => (
+        <div
+          key={s.label}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            padding: '6px 10px',
+          }}
+        >
+          <span style={{ fontSize: 12, color: 'var(--fg-1)', flex: 1 }}>
+            {s.label}
+          </span>
+          <span style={{ display: 'inline-flex', gap: 4 }}>
+            {s.keys.map((k, i) => (
+              <Kbd key={`${k}-${i}`}>{k}</Kbd>
+            ))}
+          </span>
+        </div>
+      ))}
+    </>
   );
 }
