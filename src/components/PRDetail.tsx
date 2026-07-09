@@ -57,12 +57,13 @@ type DrawerTab = 'timeline' | 'diff';
 // readability — since the modal floats over the bucket list with a
 // dim backdrop, we don't need to leave horizontal room behind it.
 // Caps at 1100px wide / 92vh tall, scales down to 92vw / 92vh on
-// smaller monitors. Maximized, it drops the cap and fills the viewport
-// bar a 2vh/2vw gutter, which is where the diff becomes properly
-// readable on a large display.
+// smaller monitors. Maximized, it drops the px cap entirely and fills
+// the viewport bar a 2vw/2vh gutter — a px ceiling would just re-impose
+// the squeeze on the 4K displays this mode exists for. Long code lines
+// already scroll horizontally per-file, so extra width is pure gain.
 const MODAL_WIDTH = 'min(1100px, 92vw)';
 const MODAL_HEIGHT = 'min(900px, 92vh)';
-const MODAL_WIDTH_MAX = 'min(1720px, 96vw)';
+const MODAL_WIDTH_MAX = '96vw';
 const MODAL_HEIGHT_MAX = '96vh';
 
 export function PRDetail({
