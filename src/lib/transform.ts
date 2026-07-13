@@ -25,7 +25,7 @@ const AV_KEYS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
  * the convention. Maintain an explicit allowlist for those, in
  * addition to the `[bot]` suffix matcher. Compared case-insensitively.
  */
-const KNOWN_BOT_LOGINS = new Set<string>(['cursor']);
+const KNOWN_BOT_LOGINS = new Set<string>(['cursor', 'coderabbitai']);
 
 /**
  * GitHub Apps post reviews under a `<name>[bot]` login. They aren't
