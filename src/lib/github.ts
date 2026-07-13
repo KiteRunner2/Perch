@@ -90,6 +90,14 @@ export const DASHBOARD_QUERY = /* GraphQL */ `
         }
       }
     }
+    latestOpinionatedReviews(last: 10) {
+      nodes {
+        id
+        author { login }
+        state
+        submittedAt
+      }
+    }
     reviews(last: 20) {
       nodes {
         id

@@ -207,6 +207,180 @@ describe('transformDashboard', () => {
     expect(reviewKinds).toContain('review-comment');
   });
 
+  it('keeps a standing CHANGES_REQUESTED verdict when the reviewer comments afterwards', () => {
+    // Real-world repro (kritik#407): a reviewer requests changes, then
+    // leaves one more inline comment seconds later. GitHub records the
+    // follow-up as a separate COMMENTED review, but the PR is still
+    // blocked — a comment never clears a standing verdict.
+    const pr = makeGqlPR({
+      author: { login: 'alice' },
+      reviews: {
+        nodes: [
+          {
+            id: 'R1',
+            author: { login: 'bob' },
+            state: 'CHANGES_REQUESTED',
+            submittedAt: '2026-07-13T21:18:14Z',
+            body: '',
+            comments: { nodes: [] },
+          },
+          {
+            id: 'R2',
+            author: { login: 'bob' },
+            state: 'COMMENTED',
+            submittedAt: '2026-07-13T21:18:42Z',
+            body: '',
+            comments: {
+              nodes: [
+                {
+                  id: 'RC1',
+                  body: 'one more thing',
+                  path: 'src/x.ts',
+                  line: 3,
+                  originalLine: 3,
+                  createdAt: '2026-07-13T21:18:42Z',
+                },
+              ],
+            },
+          },
+        ],
+      },
+    });
+    const out = transformDashboard(makeResponse([pr])).prs[0]!;
+    expect(out.approvalState).toBe('changes');
+    expect(out.reviewers.find((r) => r.login === 'bob')!.state).toBe('changes');
+  });
+
+  it('keeps a standing APPROVED verdict when the reviewer comments afterwards', () => {
+    const pr = makeGqlPR({
+      author: { login: 'alice' },
+      reviews: {
+        nodes: [
+          {
+            id: 'R1',
+            author: { login: 'bob' },
+            state: 'APPROVED',
+            submittedAt: '2026-07-13T10:00:00Z',
+            body: '',
+            comments: { nodes: [] },
+          },
+          {
+            id: 'R2',
+            author: { login: 'bob' },
+            state: 'COMMENTED',
+            submittedAt: '2026-07-13T11:00:00Z',
+            body: 'follow-up thought',
+            comments: { nodes: [] },
+          },
+        ],
+      },
+    });
+    const out = transformDashboard(makeResponse([pr])).prs[0]!;
+    expect(out.approvalState).toBe('approved');
+    expect(out.approvalCount).toBe(1);
+    expect(out.reviewers.find((r) => r.login === 'bob')!.state).toBe('approved');
+  });
+
+  it('lets a newer opinionated review replace an older verdict', () => {
+    // changes → (comment) → approve must land on approved.
+    const pr = makeGqlPR({
+      author: { login: 'alice' },
+      reviews: {
+        nodes: [
+          {
+            id: 'R1',
+            author: { login: 'bob' },
+            state: 'CHANGES_REQUESTED',
+            submittedAt: '2026-07-13T10:00:00Z',
+            body: '',
+            comments: { nodes: [] },
+          },
+          {
+            id: 'R2',
+            author: { login: 'bob' },
+            state: 'COMMENTED',
+            submittedAt: '2026-07-13T11:00:00Z',
+            body: 'replying to your fix',
+            comments: { nodes: [] },
+          },
+          {
+            id: 'R3',
+            author: { login: 'bob' },
+            state: 'APPROVED',
+            submittedAt: '2026-07-13T12:00:00Z',
+            body: '',
+            comments: { nodes: [] },
+          },
+        ],
+      },
+    });
+    const out = transformDashboard(makeResponse([pr])).prs[0]!;
+    expect(out.approvalState).toBe('approved');
+    expect(out.reviewers.find((r) => r.login === 'bob')!.state).toBe('approved');
+  });
+
+  it("keeps the viewer's own verdict when they comment afterwards", () => {
+    const pr = makeGqlPR({
+      author: { login: 'alice' },
+      reviews: {
+        nodes: [
+          {
+            id: 'R1',
+            author: { login: 'me' },
+            state: 'CHANGES_REQUESTED',
+            submittedAt: '2026-07-13T10:00:00Z',
+            body: '',
+            comments: { nodes: [] },
+          },
+          {
+            id: 'R2',
+            author: { login: 'me' },
+            state: 'COMMENTED',
+            submittedAt: '2026-07-13T11:00:00Z',
+            body: 'ping',
+            comments: { nodes: [] },
+          },
+        ],
+      },
+    });
+    const out = transformDashboard(makeResponse([pr])).prs[0]!;
+    expect(out.viewerReviewState).toBe('changes');
+  });
+
+  it('recovers a verdict that fell out of the reviews window via latestOpinionatedReviews', () => {
+    // On chatty PRs the CHANGES_REQUESTED review can age out of
+    // reviews(last: 20) while follow-up chatter stays in. The
+    // latestOpinionatedReviews connection still carries the verdict.
+    const pr = makeGqlPR({
+      author: { login: 'alice' },
+      reviews: {
+        nodes: [
+          {
+            id: 'R2',
+            author: { login: 'bob' },
+            state: 'COMMENTED',
+            submittedAt: '2026-07-13T22:00:00Z',
+            body: 'still discussing',
+            comments: { nodes: [] },
+          },
+        ],
+      },
+      latestOpinionatedReviews: {
+        nodes: [
+          {
+            id: 'R1',
+            author: { login: 'bob' },
+            state: 'CHANGES_REQUESTED',
+            submittedAt: '2026-07-13T21:18:14Z',
+          },
+        ],
+      },
+    });
+    const out = transformDashboard(makeResponse([pr])).prs[0]!;
+    expect(out.approvalState).toBe('changes');
+    expect(out.reviewers.find((r) => r.login === 'bob')!.state).toBe('changes');
+  });
+
   it('attaches the PR description to the opened timeline event', () => {
     const pr = makeGqlPR({
       body: 'Resolves KRIT-487. Migrates the LTI launcher to v1.3.',

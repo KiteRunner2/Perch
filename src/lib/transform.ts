@@ -133,30 +133,54 @@ interface LatestReview {
   author: GqlUser;
 }
 
-/** Latest review-state per reviewer login (submitted reviews only). */
+/**
+ * Opinionated states carry a verdict. Mirrors GitHub's semantics: a
+ * COMMENTED review never clears a standing APPROVED/CHANGES_REQUESTED
+ * (dismissal flips the review itself to DISMISSED, which does).
+ */
+function isVerdict(state: ReviewState): boolean {
+  return (
+    state === 'APPROVED' || state === 'CHANGES_REQUESTED' || state === 'DISMISSED'
+  );
+}
+
+/**
+ * Current review-state per reviewer login (submitted reviews only).
+ * A reviewer's standing state is their latest *opinionated* review;
+ * COMMENTED only surfaces when they never gave a verdict.
+ */
 function latestReviewByLogin(pr: GqlPullRequest): Map<string, LatestReview> {
   const map = new Map<string, LatestReview>();
-  for (const r of pr.reviews.nodes) {
-    if (!r.author) continue;
+  const apply = (r: {
+    author: GqlUser | null;
+    state: ReviewState;
+    submittedAt: string | null;
+  }): void => {
+    if (!r.author) return;
     const prev = map.get(r.author.login);
+    let replace = false;
     if (!prev) {
+      replace = true;
+    } else if (isVerdict(r.state) !== isVerdict(prev.state)) {
+      // A verdict outranks chatter regardless of timestamps.
+      replace = isVerdict(r.state);
+    } else {
+      const prevT = prev.submittedAt ? Date.parse(prev.submittedAt) : 0;
+      const curT = r.submittedAt ? Date.parse(r.submittedAt) : 0;
+      replace = curT >= prevT;
+    }
+    if (replace) {
       map.set(r.author.login, {
         state: r.state,
         submittedAt: r.submittedAt,
         author: r.author,
       });
-      continue;
     }
-    const prevT = prev.submittedAt ? Date.parse(prev.submittedAt) : 0;
-    const curT = r.submittedAt ? Date.parse(r.submittedAt) : 0;
-    if (curT >= prevT) {
-      map.set(r.author.login, {
-        state: r.state,
-        submittedAt: r.submittedAt,
-        author: r.author,
-      });
-    }
-  }
+  };
+  for (const r of pr.reviews.nodes) apply(r);
+  // Standing verdicts can age out of reviews(last: N) on chatty PRs;
+  // latestOpinionatedReviews carries them regardless of chat volume.
+  for (const r of pr.latestOpinionatedReviews?.nodes ?? []) apply(r);
   return map;
 }
 

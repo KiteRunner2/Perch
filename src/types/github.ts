@@ -51,6 +51,19 @@ export interface GqlReview {
   comments: { nodes: GqlReviewComment[] };
 }
 
+/**
+ * Node of `latestOpinionatedReviews` — GitHub returns each reviewer's
+ * latest APPROVED/CHANGES_REQUESTED review (dismissed ones excluded).
+ * No body/comments: it only exists to carry verdicts that may have
+ * aged out of the `reviews(last: N)` window.
+ */
+export interface GqlOpinionatedReview {
+  id: string;
+  author: GqlUser | null;
+  state: ReviewState;
+  submittedAt: string | null;
+}
+
 export interface GqlIssueComment {
   id: string;
   author: GqlUser | null;
@@ -102,6 +115,7 @@ export interface GqlPullRequest {
   assignees: { nodes: GqlUser[] };
   reviewRequests: { nodes: GqlReviewRequest[] };
   reviews: { nodes: GqlReview[] };
+  latestOpinionatedReviews?: { nodes: GqlOpinionatedReview[] };
   comments: { nodes: GqlIssueComment[] };
   commits: { totalCount: number; nodes: GqlCommit[] };
   /**
