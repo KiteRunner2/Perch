@@ -110,7 +110,13 @@ export interface GqlPullRequest {
   headRefOid: string;
   /** Target branch (usually `main`). */
   baseRefName: string;
-  repository: { nameWithOwner: string; isArchived: boolean };
+  repository: {
+    nameWithOwner: string;
+    isArchived: boolean;
+    mergeCommitAllowed: boolean;
+    squashMergeAllowed: boolean;
+    rebaseMergeAllowed: boolean;
+  };
   author: (GqlUser & { __typename?: string }) | null;
   assignees: { nodes: GqlUser[] };
   reviewRequests: { nodes: GqlReviewRequest[] };

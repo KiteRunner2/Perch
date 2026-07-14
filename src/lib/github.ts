@@ -75,7 +75,13 @@ export const DASHBOARD_QUERY = /* GraphQL */ `
     headRefName
     headRefOid
     baseRefName
-    repository { nameWithOwner isArchived }
+    repository {
+      nameWithOwner
+      isArchived
+      mergeCommitAllowed
+      squashMergeAllowed
+      rebaseMergeAllowed
+    }
     author {
       login
       ... on User { avatarUrl }
@@ -252,6 +258,47 @@ export async function submitReview(
     // payload the API receives. APPROVE permits an empty body; the
     // other verdicts are gated upstream by reviewActionEnabled.
     body: body.trim(),
+  });
+}
+
+export const MERGE_PULL_REQUEST_MUTATION = /* GraphQL */ `
+  mutation MergePullRequest(
+    $pullRequestId: ID!
+    $expectedHeadOid: GitObjectID!
+    $mergeMethod: PullRequestMergeMethod!
+  ) {
+    mergePullRequest(
+      input: {
+        pullRequestId: $pullRequestId
+        expectedHeadOid: $expectedHeadOid
+        mergeMethod: $mergeMethod
+      }
+    ) {
+      pullRequest {
+        id
+        mergedAt
+      }
+    }
+  }
+`;
+
+/**
+ * Merge a PR at the exact head commit shown in Perch. Supplying
+ * `expectedHeadOid` makes GitHub reject the mutation if new commits
+ * landed after the dashboard was fetched, forcing the user to review
+ * the updated head before trying again.
+ */
+export async function mergePullRequest(
+  token: string,
+  pullRequestId: string,
+  expectedHeadOid: string,
+  mergeMethod: 'MERGE' | 'SQUASH' | 'REBASE',
+): Promise<void> {
+  const client = createClient(token);
+  await client.request(MERGE_PULL_REQUEST_MUTATION, {
+    pullRequestId,
+    expectedHeadOid,
+    mergeMethod,
   });
 }
 

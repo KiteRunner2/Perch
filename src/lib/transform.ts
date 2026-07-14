@@ -316,6 +316,11 @@ export function transformPR(
     updatedAt: pr.updatedAt,
     createdAt: pr.createdAt,
     repoNameWithOwner: pr.repository.nameWithOwner,
+    mergeMethod: pr.repository.mergeCommitAllowed
+      ? 'MERGE'
+      : pr.repository.squashMergeAllowed
+        ? 'SQUASH'
+        : 'REBASE',
     author,
     viewerIsAuthor,
     viewerIsRequestedReviewer,

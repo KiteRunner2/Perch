@@ -14,6 +14,8 @@ export type ApprovalState = 'approved' | 'pending' | 'changes';
 
 export type LabelTone = 'err' | 'warn' | 'ok' | 'info' | 'violet' | 'neutral';
 
+export type MergeMethod = 'MERGE' | 'SQUASH' | 'REBASE';
+
 export interface DashboardUser {
   login: string;
   avatarUrl?: string;
@@ -69,6 +71,8 @@ export interface DashboardPR {
   updatedAt: string;
   createdAt: string;
   repoNameWithOwner: string;
+  /** First merge method enabled by the repository, in GitHub's default order. */
+  mergeMethod: MergeMethod;
   author: DashboardUser;
   viewerIsAuthor: boolean;
   viewerIsRequestedReviewer: boolean;

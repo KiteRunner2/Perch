@@ -16,6 +16,7 @@ import {
   Minimize2,
   PanelLeft,
   MessageSquare,
+  GitMerge,
 } from 'lucide-react';
 import { formatDistanceToNowStrict } from 'date-fns';
 import ReactMarkdown from 'react-markdown';
@@ -31,7 +32,9 @@ import { DiffTab, prefersReducedMotion } from './DiffTab';
 import { useSubmitReview } from '../hooks/useSubmitReview';
 import { useRerunPipeline } from '../hooks/useRerunPipeline';
 import { useSetDraftState } from '../hooks/useSetDraftState';
+import { useMergePullRequest } from '../hooks/useMergePullRequest';
 import { isEditableTarget } from '../hooks/useKeyboardNav';
+import { isReadyToMerge } from '../lib/bucketing';
 import { reviewActionEnabled, type ReviewEvent } from '../lib/reviewActions';
 import { DIFF_FONT_MAX, DIFF_FONT_MIN, redactToken } from '../lib/storage';
 import { useUIStore } from '../store';
@@ -1876,14 +1879,17 @@ function ReviewComposer({
   textareaRef: React.RefObject<HTMLTextAreaElement>;
 }) {
   const [body, setBody] = useState('');
+  const [mergeConfirmationOpen, setMergeConfirmationOpen] = useState(false);
   const token = useUIStore((s) => s.token);
   const mutation = useSubmitReview();
+  const mergeMutation = useMergePullRequest();
 
   // No review actions on merged PRs — they're historical, and GitHub
   // rejects approve/request-changes on a merged PR.
   if (pr.isMerged) return null;
 
   const pending = mutation.isPending;
+  const actionPending = pending || mergeMutation.isPending;
   const activeEvent = mutation.variables?.event;
 
   function submit(event: ReviewEvent) {
@@ -1920,6 +1926,48 @@ function ReviewComposer({
     return msg;
   })();
 
+  const mergeErrorMessage = (() => {
+    if (!mergeMutation.error) return null;
+    let msg = mergeMutation.error.message;
+    if (token) msg = msg.split(token).join(redactToken(token));
+    if (/permission|forbidden|403|not authorized|scope|resource not accessible/i.test(msg)) {
+      return `${msg} — your token may lack write access. Merging needs the "repo" scope (classic) or "Pull requests: Read and write" (fine-grained).`;
+    }
+    return msg;
+  })();
+
+  const mergeEnabled = isReadyToMerge(pr) && !actionPending;
+  const mergeTitle = pr.isDraft
+    ? 'Draft pull requests cannot be merged'
+    : pr.mergeable === 'CONFLICTING'
+      ? 'Resolve merge conflicts before merging'
+      : pr.mergeable !== 'MERGEABLE'
+        ? 'GitHub is still calculating mergeability'
+        : pr.approvalState === 'changes'
+          ? 'Requested changes must be resolved before merging'
+          : pr.approvalCount < 1
+            ? 'At least one approval is required before merging'
+            : pr.ciStatus !== 'success'
+              ? 'All checks must pass before merging'
+              : 'Merge this pull request';
+
+  function openMergeConfirmation() {
+    if (!mergeEnabled) return;
+    mergeMutation.reset();
+    setMergeConfirmationOpen(true);
+  }
+
+  function confirmMerge() {
+    mergeMutation.mutate(
+      {
+        pullRequestId: pr.id,
+        expectedHeadOid: pr.headSha,
+        mergeMethod: pr.mergeMethod,
+      },
+      { onSuccess: () => setMergeConfirmationOpen(false) },
+    );
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <textarea
@@ -1930,7 +1978,7 @@ function ReviewComposer({
         aria-label="Review comment"
         placeholder="Leave a review comment (optional for Approve)… ⌘↵ to submit"
         rows={2}
-        disabled={pending}
+        disabled={actionPending}
         style={{
           width: '100%',
           resize: 'vertical',
@@ -1960,7 +2008,7 @@ function ReviewComposer({
       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
         {VERDICTS.map(({ event, label, tone }) => {
           const enabled =
-            !pending && reviewActionEnabled(event, body, pr.viewerIsAuthor);
+            !actionPending && reviewActionEnabled(event, body, pr.viewerIsAuthor);
           const isActive = pending && activeEvent === event;
           const needsBody = event !== 'APPROVE' && body.trim().length === 0;
           const blockedAsAuthor = pr.viewerIsAuthor && event !== 'COMMENT';
@@ -1983,6 +2031,20 @@ function ReviewComposer({
             </button>
           );
         })}
+        <button
+          type="button"
+          onClick={openMergeConfirmation}
+          disabled={!mergeEnabled}
+          title={mergeTitle}
+          style={verdictBtnStyle('ok', mergeEnabled, false)}
+        >
+          {mergeMutation.isPending ? (
+            <Loader2 size={12} className="spin" aria-hidden />
+          ) : (
+            <GitMerge size={12} aria-hidden />
+          )}
+          Merge
+        </button>
         {armed && (
           <span style={{ fontSize: 11, color: 'var(--fg-3)' }}>
             <span className="mono" style={{ color: 'var(--fg-1)' }}>
@@ -1992,8 +2054,173 @@ function ReviewComposer({
           </span>
         )}
       </div>
+      {mergeConfirmationOpen && (
+        <MergeConfirmationDialog
+          pr={pr}
+          pending={mergeMutation.isPending}
+          errorMessage={mergeErrorMessage}
+          onCancel={() => {
+            if (!mergeMutation.isPending) setMergeConfirmationOpen(false);
+          }}
+          onConfirm={confirmMerge}
+        />
+      )}
     </div>
   );
+}
+
+function MergeConfirmationDialog({
+  pr,
+  pending,
+  errorMessage,
+  onCancel,
+  onConfirm,
+}: {
+  pr: DashboardPR;
+  pending: boolean;
+  errorMessage: string | null;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div
+      role="presentation"
+      onClick={onCancel}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === 'Escape' && !pending) onCancel();
+      }}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 70,
+        background: 'rgba(0, 0, 0, 0.55)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 24,
+      }}
+    >
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="merge-confirmation-title"
+        aria-describedby="merge-confirmation-description"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: 620,
+          maxWidth: '100%',
+          padding: 18,
+          borderRadius: 10,
+          border: '1px solid var(--line-2)',
+          background: 'var(--bg-1)',
+          boxShadow: '0 24px 70px rgba(0, 0, 0, 0.5)',
+        }}
+      >
+        <h2
+          id="merge-confirmation-title"
+          style={{ margin: 0, color: 'var(--fg-0)', fontSize: 15, fontWeight: 650 }}
+        >
+          Merge pull request?
+        </h2>
+        <div
+          id="merge-confirmation-description"
+        >
+          <p
+            style={{
+              margin: '8px 0 0',
+              color: 'var(--fg-1)',
+              fontSize: 12.5,
+              lineHeight: 1.5,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Merge{' '}
+            <span className="mono" style={{ fontWeight: 700 }}>
+              {pr.headRefName}
+            </span>{' '}
+            into{' '}
+            <span className="mono" style={{ fontWeight: 700 }}>
+              {pr.baseRefName}
+            </span>
+            {'?'}
+          </p>
+          <p
+            style={{
+              margin: '14px 0 0',
+              color: 'var(--fg-2)',
+              fontSize: 12.5,
+              lineHeight: 1.5,
+            }}
+          >
+            This will merge the exact head commit currently shown in Perch using a{' '}
+            {pr.mergeMethod === 'MERGE'
+              ? 'merge commit'
+              : pr.mergeMethod === 'SQUASH'
+                ? 'squash merge'
+                : 'rebase merge'}.
+          </p>
+        </div>
+        {errorMessage && (
+          <div
+            role="alert"
+            style={{
+              marginTop: 12,
+              padding: '8px 10px',
+              borderRadius: 6,
+              border: '1px solid var(--err-line)',
+              background: 'var(--err-bg)',
+              color: 'var(--err)',
+              fontSize: 11.5,
+              lineHeight: 1.45,
+            }}
+          >
+            {errorMessage}
+          </div>
+        )}
+        <div
+          style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 18 }}
+        >
+          <button
+            type="button"
+            autoFocus
+            onClick={onCancel}
+            disabled={pending}
+            style={confirmationBtnStyle(false, !pending)}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={pending}
+            style={confirmationBtnStyle(true, !pending)}
+          >
+            {pending && <Loader2 size={12} className="spin" aria-hidden />}
+            Merge PR
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function confirmationBtnStyle(primary: boolean, enabled: boolean): React.CSSProperties {
+  return {
+    height: 32,
+    padding: '0 13px',
+    borderRadius: 6,
+    border: primary ? '1px solid var(--ok)' : '1px solid var(--line-2)',
+    background: primary ? 'var(--ok)' : 'var(--bg-2)',
+    color: primary ? 'var(--bg-0)' : 'var(--fg-1)',
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: enabled ? 'pointer' : 'not-allowed',
+    opacity: enabled ? 1 : 0.55,
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+  };
 }
 
 function verdictBtnStyle(

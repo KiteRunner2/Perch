@@ -23,7 +23,13 @@ function makeGqlPR(overrides: Partial<GqlPullRequest> = {}): GqlPullRequest {
     headRefName: 'feature/example',
     headRefOid: 'abc123def456',
     baseRefName: 'main',
-    repository: { nameWithOwner: 'example/repo', isArchived: false },
+    repository: {
+      nameWithOwner: 'example/repo',
+      isArchived: false,
+      mergeCommitAllowed: true,
+      squashMergeAllowed: true,
+      rebaseMergeAllowed: true,
+    },
     author: { login: 'alice' },
     assignees: { nodes: [] },
     reviewRequests: { nodes: [] },
@@ -58,10 +64,32 @@ describe('transformDashboard', () => {
     const active = makeGqlPR({ id: 'LIVE' });
     const archived = makeGqlPR({
       id: 'DEAD',
-      repository: { nameWithOwner: 'example/old', isArchived: true },
+      repository: {
+        nameWithOwner: 'example/old',
+        isArchived: true,
+        mergeCommitAllowed: true,
+        squashMergeAllowed: true,
+        rebaseMergeAllowed: true,
+      },
     });
     const out = transformDashboard(makeResponse([active, archived]));
     expect(out.prs.map((p) => p.id)).toEqual(['LIVE']);
+  });
+
+  it('uses the first merge method enabled by the repository', () => {
+    const squashOnly = makeGqlPR({
+      repository: {
+        nameWithOwner: 'example/repo',
+        isArchived: false,
+        mergeCommitAllowed: false,
+        squashMergeAllowed: true,
+        rebaseMergeAllowed: false,
+      },
+    });
+
+    expect(transformDashboard(makeResponse([squashOnly])).prs[0]!.mergeMethod).toBe(
+      'SQUASH',
+    );
   });
 
   it('builds a timeline: opened + reviews + comments, sorted by time', () => {

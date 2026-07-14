@@ -30,6 +30,7 @@ function makePR(overrides: Partial<DashboardPR> = {}): DashboardPR {
     updatedAt: new Date(now).toISOString(),
     createdAt: new Date(now).toISOString(),
     repoNameWithOwner: 'example/repo',
+    mergeMethod: 'MERGE',
     author: { login: 'me', av: 'a' },
     viewerIsAuthor: true,
     viewerIsRequestedReviewer: false,
