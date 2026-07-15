@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { clampDiffFontSize, storage, type Scope, type Theme } from './lib/storage';
+import type { CommitSortOrder } from './types/commits';
 
 interface UIState {
   token: string | null;
@@ -19,6 +20,8 @@ interface UIState {
   diffFontSize: number;
   /** File rail visible in the Diff tab. Persisted. */
   diffRailOpen: boolean;
+  /** Remembered order for the Commits tab. */
+  commitSortOrder: CommitSortOrder;
   setToken: (token: string | null) => void;
   setTheme: (theme: Theme) => void;
   setScope: (scope: Scope) => void;
@@ -34,6 +37,7 @@ interface UIState {
   toggleDiffRail: () => void;
   /** Step the diff font size by `delta`, clamping at both ends. */
   adjustDiffFontSize: (delta: number) => void;
+  setCommitSortOrder: (order: CommitSortOrder) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -50,6 +54,7 @@ export const useUIStore = create<UIState>((set) => ({
   diffMaximized: storage.getDiffMaximized(),
   diffFontSize: storage.getDiffFontSize(),
   diffRailOpen: storage.getDiffRailOpen(),
+  commitSortOrder: storage.getCommitSortOrder(),
   // Start with "Recently merged" folded since it's historical and not
   // the attention-first signal.
   collapsedBuckets: new Set<string>(['merged']),
@@ -94,6 +99,10 @@ export const useUIStore = create<UIState>((set) => ({
       storage.setDiffFontSize(diffFontSize);
       return { diffFontSize };
     }),
+  setCommitSortOrder: (commitSortOrder) => {
+    storage.setCommitSortOrder(commitSortOrder);
+    set({ commitSortOrder });
+  },
   setSelectedPRId: (id) => set({ selectedPRId: id }),
   setDetailOpen: (open) => set({ detailOpen: open }),
   setSettingsOpen: (open) => set({ settingsOpen: open }),

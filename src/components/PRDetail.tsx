@@ -29,6 +29,7 @@ import {
   TONE_STYLE,
 } from './primitives';
 import { DiffTab, prefersReducedMotion } from './DiffTab';
+import { CommitsTab } from './CommitsTab';
 import { useSubmitReview } from '../hooks/useSubmitReview';
 import { useRerunPipeline } from '../hooks/useRerunPipeline';
 import { useSetDraftState } from '../hooks/useSetDraftState';
@@ -54,7 +55,8 @@ interface Props {
   onNavigate: (id: string) => void;
 }
 
-type DrawerTab = 'timeline' | 'diff';
+type DrawerTab = 'timeline' | 'commits' | 'diff';
+const DRAWER_TABS: DrawerTab[] = ['timeline', 'commits', 'diff'];
 
 // Centered modal layout (experimenting). Sized generously for Diff
 // readability — since the modal floats over the bucket list with a
@@ -103,9 +105,11 @@ export function PRDetail({
   const adjustFontSize = useUIStore((s) => s.adjustDiffFontSize);
 
   const isDiff = activeTab === 'diff';
-  // On the Diff tab the composer is collapsed behind "Review ▾"; on the
-  // Timeline tab it stays open, as it always has.
-  const composerOpen = !isDiff || reviewOpen;
+  const isCommits = activeTab === 'commits';
+  const isReading = isDiff || isCommits;
+  // Reading tabs collapse the composer behind "Review ▾"; Timeline
+  // keeps it open, as it always has.
+  const composerOpen = !isReading || reviewOpen;
 
   const mergeableTone =
     pr.mergeable === 'MERGEABLE'
@@ -306,17 +310,16 @@ export function PRDetail({
         </button>
       </div>
 
-      {/* On the Diff tab the ~200px info block collapses to a one-line
-          context strip — everything you need to hold in mind while
-          reading code, and ~160px handed back to the diff. */}
-      {isDiff && (
+      {/* Reading tabs collapse the ~200px info block to one line so the
+          primary content keeps the modal's vertical space. */}
+      {isReading && (
         <PRContextStrip
           pr={pr}
           expanded={detailsExpanded}
           onToggle={() => setDetailsExpanded((v) => !v)}
         />
       )}
-      {(!isDiff || detailsExpanded) && (
+      {(!isReading || detailsExpanded) && (
         <PRInfoBlock pr={pr} mergeableTone={mergeableTone} />
       )}
 
@@ -324,13 +327,15 @@ export function PRDetail({
         activeTab={activeTab}
         onChange={setActiveTab}
         timelineCount={pr.timeline.length}
+        commitCount={pr.commitCount}
         fileCount={pr.changedFiles}
       />
 
-      {activeTab === 'diff' ? (
-        <DiffTab pr={pr} active={activeTab === 'diff'} />
-      ) : (
+      {activeTab === 'timeline' && (
         <div
+          id="pr-panel-timeline"
+          role="tabpanel"
+          aria-labelledby="pr-tab-timeline"
           style={{
             padding: '14px 18px',
             overflow: 'auto',
@@ -401,10 +406,30 @@ export function PRDetail({
 
         </div>
       )}
+      {activeTab === 'commits' && (
+        <div
+          id="pr-panel-commits"
+          role="tabpanel"
+          aria-labelledby="pr-tab-commits"
+          style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
+        >
+          <CommitsTab pr={pr} active />
+        </div>
+      )}
+      {activeTab === 'diff' && (
+        <div
+          id="pr-panel-diff"
+          role="tabpanel"
+          aria-labelledby="pr-tab-diff"
+          style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
+        >
+          <DiffTab pr={pr} active />
+        </div>
+      )}
 
       <div
         style={{
-          padding: isDiff ? '8px 16px' : 10,
+          padding: isReading ? '8px 16px' : 10,
           borderTop: '1px solid var(--line-1)',
           background: 'var(--bg-2)',
           display: 'flex',
@@ -421,7 +446,7 @@ export function PRDetail({
             textareaRef={composerRef}
           />
         )}
-        {isDiff ? (
+        {isReading ? (
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             {!pr.isMerged && (
               <button
@@ -558,7 +583,7 @@ const headerIconBtnStyle: React.CSSProperties = {
   justifyContent: 'center',
 };
 
-/** The full ~200px PR summary. Always on Timeline; opt-in on Diff. */
+/** The full ~200px PR summary. Always on Timeline; opt-in on reading tabs. */
 function PRInfoBlock({
   pr,
   mergeableTone,
@@ -729,7 +754,7 @@ function mergeableValue(pr: DashboardPR): string {
       : 'Unknown';
 }
 
-/** One-line replacement for the info block while the Diff tab is up. */
+/** One-line replacement for the info block while a reading tab is up. */
 function PRContextStrip({
   pr,
   expanded,
@@ -1212,15 +1237,39 @@ function TabStrip({
   activeTab,
   onChange,
   timelineCount,
+  commitCount,
   fileCount,
 }: {
   activeTab: DrawerTab;
   onChange: (tab: DrawerTab) => void;
   timelineCount: number;
+  commitCount: number;
   fileCount: number;
 }) {
+  function onKeyDown(e: React.KeyboardEvent<HTMLDivElement>): void {
+    const current = DRAWER_TABS.indexOf(activeTab);
+    let next: DrawerTab | null = null;
+    if (e.key === 'ArrowRight') {
+      next = DRAWER_TABS[(current + 1) % DRAWER_TABS.length]!;
+    } else if (e.key === 'ArrowLeft') {
+      next = DRAWER_TABS[(current - 1 + DRAWER_TABS.length) % DRAWER_TABS.length]!;
+    } else if (e.key === 'Home') {
+      next = DRAWER_TABS[0]!;
+    } else if (e.key === 'End') {
+      next = DRAWER_TABS.at(-1)!;
+    }
+    if (!next) return;
+    e.preventDefault();
+    e.stopPropagation();
+    onChange(next);
+    requestAnimationFrame(() => document.getElementById(`pr-tab-${next}`)?.focus());
+  }
+
   return (
     <div
+      role="tablist"
+      aria-label="Pull request details"
+      onKeyDown={onKeyDown}
       style={{
         padding: '0 14px',
         display: 'flex',
@@ -1230,12 +1279,21 @@ function TabStrip({
       }}
     >
       <TabButton
+        tab="timeline"
         label="Timeline"
         count={timelineCount}
         active={activeTab === 'timeline'}
         onClick={() => onChange('timeline')}
       />
       <TabButton
+        tab="commits"
+        label="Commits"
+        count={commitCount}
+        active={activeTab === 'commits'}
+        onClick={() => onChange('commits')}
+      />
+      <TabButton
+        tab="diff"
         label="Diff"
         count={fileCount}
         active={activeTab === 'diff'}
@@ -1246,11 +1304,13 @@ function TabStrip({
 }
 
 function TabButton({
+  tab,
   label,
   count,
   active,
   onClick,
 }: {
+  tab: DrawerTab;
   label: string;
   count: number | null;
   active: boolean;
@@ -1258,6 +1318,11 @@ function TabButton({
 }) {
   return (
     <button
+      id={`pr-tab-${tab}`}
+      role="tab"
+      aria-selected={active}
+      aria-controls={`pr-panel-${tab}`}
+      tabIndex={active ? 0 : -1}
       onClick={onClick}
       style={{
         height: 36,

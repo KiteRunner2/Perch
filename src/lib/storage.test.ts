@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   clampDiffFontSize,
   diffLineHeight,
@@ -6,6 +6,7 @@ import {
   DIFF_FONT_MAX,
   DIFF_FONT_MIN,
   redactToken,
+  storage,
 } from './storage';
 
 describe('clampDiffFontSize', () => {
@@ -54,5 +55,54 @@ describe('redactToken', () => {
   it('fully masks short tokens and returns empty for none', () => {
     expect(redactToken('short')).toBe('••••');
     expect(redactToken('')).toBe('');
+  });
+});
+
+describe('commit sort preference', () => {
+  const originalStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+
+  afterEach(() => {
+    if (originalStorage) {
+      Object.defineProperty(globalThis, 'localStorage', originalStorage);
+    } else {
+      delete (globalThis as { localStorage?: Storage }).localStorage;
+    }
+  });
+
+  function stubStorage(initial?: string): Map<string, string> {
+    const values = new Map<string, string>();
+    if (initial != null) values.set('perch.commits.sortOrder', initial);
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => values.set(key, value),
+        removeItem: (key: string) => values.delete(key),
+        clear: () => values.clear(),
+        key: (index: number) => Array.from(values.keys())[index] ?? null,
+        get length() {
+          return values.size;
+        },
+      } satisfies Storage,
+    });
+    return values;
+  }
+
+  it('defaults malformed and missing values to newest', () => {
+    stubStorage('sideways');
+    expect(storage.getCommitSortOrder()).toBe('newest');
+
+    stubStorage();
+    expect(storage.getCommitSortOrder()).toBe('newest');
+  });
+
+  it('persists and restores either supported order', () => {
+    const values = stubStorage();
+    storage.setCommitSortOrder('oldest');
+    expect(values.get('perch.commits.sortOrder')).toBe('oldest');
+    expect(storage.getCommitSortOrder()).toBe('oldest');
+
+    storage.setCommitSortOrder('newest');
+    expect(storage.getCommitSortOrder()).toBe('newest');
   });
 });

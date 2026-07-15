@@ -1,3 +1,5 @@
+import type { CommitSortOrder } from '../types/commits';
+
 const TOKEN_KEY = 'perch.token';
 const THEME_KEY = 'perch.theme';
 const SCOPE_KEY = 'perch.scope';
@@ -6,6 +8,7 @@ const NOTIFICATIONS_KEY = 'perch.notifications';
 const DIFF_MAXIMIZED_KEY = 'perch.diff.maximized';
 const DIFF_FONT_SIZE_KEY = 'perch.diff.fontSize';
 const DIFF_RAIL_OPEN_KEY = 'perch.diff.railOpen';
+const COMMITS_SORT_ORDER_KEY = 'perch.commits.sortOrder';
 
 export type Theme = 'dark' | 'light';
 export type Scope = 'inbox' | 'all';
@@ -111,6 +114,18 @@ export const storage = {
   },
   setDiffRailOpen(open: boolean): void {
     localStorage.setItem(DIFF_RAIL_OPEN_KEY, open ? 'true' : 'false');
+  },
+  getCommitSortOrder(): CommitSortOrder {
+    try {
+      return localStorage.getItem(COMMITS_SORT_ORDER_KEY) === 'oldest'
+        ? 'oldest'
+        : 'newest';
+    } catch {
+      return 'newest';
+    }
+  },
+  setCommitSortOrder(order: CommitSortOrder): void {
+    localStorage.setItem(COMMITS_SORT_ORDER_KEY, order);
   },
 };
 
