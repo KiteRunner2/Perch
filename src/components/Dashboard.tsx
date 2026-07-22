@@ -17,7 +17,8 @@ import { HelpOverlay } from './HelpOverlay';
 import { LoadingSkeleton } from './LoadingSkeleton';
 import { ErrorBanner } from './ErrorBanner';
 import { bucketize, flattenForNav } from '../lib/bucketing';
-import type { DashboardPR } from '../types/dashboard';
+import { filterPRs } from '../lib/filtering';
+import type { DashboardPR, DashboardUser } from '../types/dashboard';
 
 export function Dashboard() {
   const token = useUIStore((s) => s.token);
@@ -29,6 +30,9 @@ export function Dashboard() {
   const detailOpen = useUIStore((s) => s.detailOpen);
   const setDetailOpen = useUIStore((s) => s.setDetailOpen);
   const searchQuery = useUIStore((s) => s.searchQuery);
+  const setSearchQuery = useUIStore((s) => s.setSearchQuery);
+  const authorFilter = useUIStore((s) => s.authorFilter);
+  const setAuthorFilter = useUIStore((s) => s.setAuthorFilter);
   const notificationsEnabled = useUIStore((s) => s.notificationsEnabled);
 
   const query = usePRs({ token, scope, orgs, notificationsEnabled });
@@ -46,22 +50,35 @@ export function Dashboard() {
 
   const filtered = useMemo<DashboardPR[]>(() => {
     if (!query.data) return [];
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return query.data.prs;
-    return query.data.prs.filter((pr) => {
-      return (
-        pr.title.toLowerCase().includes(q) ||
-        pr.repoNameWithOwner.toLowerCase().includes(q) ||
-        pr.author.login.toLowerCase().includes(q) ||
-        pr.labels.some((l) => l.name.toLowerCase().includes(q))
-      );
+    return filterPRs(query.data.prs, {
+      query: searchQuery,
+      authorLogin: authorFilter?.login ?? null,
     });
-  }, [query.data, searchQuery]);
+  }, [query.data, searchQuery, authorFilter]);
+
+  const hasActiveFilter = Boolean(searchQuery.trim() || authorFilter);
 
   const buckets = useMemo(
-    () => (searchQuery ? bucketize(filtered) : query.data?.buckets ?? []),
-    [searchQuery, filtered, query.data]
+    () => (hasActiveFilter ? bucketize(filtered) : query.data?.buckets ?? []),
+    [hasActiveFilter, filtered, query.data]
   );
+
+  const toggleAuthorFilter = useCallback(
+    (author: DashboardUser) => {
+      const alreadyActive =
+        authorFilter?.login.toLowerCase() === author.login.toLowerCase();
+      setAuthorFilter(alreadyActive ? null : author);
+    },
+    [authorFilter, setAuthorFilter]
+  );
+
+  // The author lens is backed by the complete Team result. Clear it if
+  // tracked orgs are removed while the Team tab is active.
+  useEffect(() => {
+    if (authorFilter && (scope !== 'all' || orgs.length === 0)) {
+      setAuthorFilter(null);
+    }
+  }, [authorFilter, orgs.length, scope, setAuthorFilter]);
 
   const selectedPR = useMemo(
     () => filtered.find((p) => p.id === selectedPRId) ?? null,
@@ -115,10 +132,15 @@ export function Dashboard() {
     openPR
   );
 
-  const allIds = useMemo(() => filtered.map((p) => p.id), [filtered]);
+  // Persist new/comment baselines from the complete fetched dataset. A
+  // temporary view filter must not make hidden PRs look new next visit.
+  const allIds = useMemo(
+    () => query.data?.prs.map((p) => p.id) ?? [],
+    [query.data]
+  );
   const newIds = useNewPRs(allIds);
   const { deltas: newCommentDeltas, markAsRead: markCommentsRead } =
-    useNewComments(filtered);
+    useNewComments(query.data?.prs ?? []);
 
   // When the drawer opens (or the selected PR changes while it's open),
   // mark that PR's comments as read so the +N delta clears immediately.
@@ -137,6 +159,7 @@ export function Dashboard() {
 
   const totalOpen =
     query.data?.prs.filter((p) => !p.isMerged).length ?? 0;
+  const shownOpen = filtered.filter((p) => !p.isMerged).length;
   const isAuthError = query.error
     ? /bad credentials|401|unauthorized/i.test(query.error.message)
     : false;
@@ -172,11 +195,14 @@ export function Dashboard() {
       >
         <Header
           total={totalOpen}
+          shownTotal={shownOpen}
           lastUpdatedLabel={lastUpdatedLabel}
           refreshing={query.isFetching}
           onRefresh={() => void query.refetch()}
           viewerLogin={query.data?.viewer.login ?? null}
           viewerAvatarUrl={query.data?.viewer.avatarUrl}
+          authorFilter={authorFilter}
+          onClearAuthorFilter={() => setAuthorFilter(null)}
         />
 
         {query.data && <HeadlineBand buckets={buckets} />}
@@ -221,8 +247,17 @@ export function Dashboard() {
           {query.isLoading && <LoadingSkeleton />}
           {!query.isLoading && query.data && (
             <>
-              {totalOpen === 0 && !searchQuery ? (
+              {totalOpen === 0 && !hasActiveFilter ? (
                 <AllCaughtUp />
+              ) : filtered.length === 0 && hasActiveFilter ? (
+                <NoFilterMatches
+                  authorLogin={authorFilter?.login ?? null}
+                  hasSearch={Boolean(searchQuery.trim())}
+                  onClear={() => {
+                    setAuthorFilter(null);
+                    setSearchQuery('');
+                  }}
+                />
               ) : (
                 buckets.map((bucket) => (
                   <BucketSection
@@ -237,6 +272,12 @@ export function Dashboard() {
                     }}
                     onOpen={(url) =>
                       window.open(url, '_blank', 'noopener,noreferrer')
+                    }
+                    authorFilterLogin={authorFilter?.login ?? null}
+                    onAuthorFilter={
+                      scope === 'all' && orgs.length > 0
+                        ? toggleAuthorFilter
+                        : undefined
                     }
                     emptyText={EMPTY_TEXT[bucket.id]}
                   />
@@ -261,6 +302,55 @@ export function Dashboard() {
 
       <Settings rateLimit={query.data?.rateLimit} />
       <HelpOverlay />
+    </div>
+  );
+}
+
+function NoFilterMatches({
+  authorLogin,
+  hasSearch,
+  onClear,
+}: {
+  authorLogin: string | null;
+  hasSearch: boolean;
+  onClear: () => void;
+}) {
+  const description = authorLogin
+    ? hasSearch
+      ? `No PRs by @${authorLogin} match this search.`
+      : `No PRs by @${authorLogin} are in the current Team result.`
+    : 'No PRs match this search.';
+
+  return (
+    <div
+      style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 48,
+        color: 'var(--fg-2)',
+        gap: 12,
+      }}
+    >
+      <span style={{ fontSize: 13 }}>{description}</span>
+      <button
+        type="button"
+        onClick={onClear}
+        style={{
+          height: 28,
+          padding: '0 10px',
+          border: '1px solid var(--line-2)',
+          borderRadius: 6,
+          background: 'var(--bg-2)',
+          color: 'var(--fg-1)',
+          cursor: 'pointer',
+          fontSize: 11.5,
+        }}
+      >
+        Clear filters
+      </button>
     </div>
   );
 }

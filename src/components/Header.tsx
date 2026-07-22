@@ -1,27 +1,41 @@
-import { RefreshCw, Search, Settings as SettingsIcon, Sun, Moon } from 'lucide-react';
+import {
+  Moon,
+  RefreshCw,
+  Search,
+  Settings as SettingsIcon,
+  Sun,
+  X,
+} from 'lucide-react';
 import type { ChangeEvent, KeyboardEvent } from 'react';
 import { useUIStore } from '../store';
-import { Kbd } from './primitives';
+import { Avatar, Kbd } from './primitives';
 import { UpdateAvailableChip } from './UpdateAvailableChip';
 import { useVersionCheck } from '../hooks/useVersionCheck';
 import type { Theme } from '../lib/storage';
+import type { DashboardUser } from '../types/dashboard';
 
 interface HeaderProps {
   total: number;
+  shownTotal: number;
   lastUpdatedLabel: string;
   refreshing: boolean;
   onRefresh: () => void;
   viewerLogin: string | null;
   viewerAvatarUrl?: string;
+  authorFilter: DashboardUser | null;
+  onClearAuthorFilter: () => void;
 }
 
 export function Header({
   total,
+  shownTotal,
   lastUpdatedLabel,
   refreshing,
   onRefresh,
   viewerLogin,
   viewerAvatarUrl,
+  authorFilter,
+  onClearAuthorFilter,
 }: HeaderProps) {
   const searchQuery = useUIStore((s) => s.searchQuery);
   const setSearchQuery = useUIStore((s) => s.setSearchQuery);
@@ -82,7 +96,9 @@ export function Header({
             borderRadius: 3,
           }}
         >
-          {total} open
+          {shownTotal === total
+            ? `${total} open`
+            : `${shownTotal} of ${total} open`}
         </span>
       </div>
 
@@ -120,6 +136,45 @@ export function Header({
         />
         <Kbd>/</Kbd>
       </label>
+
+      {authorFilter && (
+        <button
+          type="button"
+          onClick={onClearAuthorFilter}
+          onKeyDown={(e) => e.stopPropagation()}
+          title={`Clear author filter for @${authorFilter.login}`}
+          aria-label={`Clear author filter for @${authorFilter.login}`}
+          style={{
+            height: 28,
+            maxWidth: 190,
+            padding: '0 7px 0 5px',
+            border: '1px solid var(--info-line)',
+            borderRadius: 6,
+            background: 'var(--info-bg)',
+            color: 'var(--info)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            cursor: 'pointer',
+            flexShrink: 0,
+          }}
+        >
+          <Avatar user={authorFilter} size={18} />
+          <span
+            className="mono"
+            style={{
+              color: 'var(--fg-0)',
+              fontSize: 11.5,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            @{authorFilter.login}
+          </span>
+          <X size={12} aria-hidden style={{ flexShrink: 0 }} />
+        </button>
+      )}
 
       {orgs.length > 0 && (
         <div

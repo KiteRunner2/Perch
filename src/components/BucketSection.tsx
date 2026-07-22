@@ -1,4 +1,4 @@
-import type { Bucket } from '../types/dashboard';
+import type { Bucket, DashboardUser } from '../types/dashboard';
 import { useUIStore } from '../store';
 import { PRRow } from './PRRow';
 
@@ -9,6 +9,8 @@ interface Props {
   newCommentDeltas: Map<string, number>;
   onSelect: (id: string) => void;
   onOpen: (url: string) => void;
+  authorFilterLogin?: string | null;
+  onAuthorFilter?: (author: DashboardUser) => void;
   emptyText?: string;
 }
 
@@ -19,6 +21,8 @@ export function BucketSection({
   newCommentDeltas,
   onSelect,
   onOpen,
+  authorFilterLogin,
+  onAuthorFilter,
   emptyText,
 }: Props) {
   const collapsedBuckets = useUIStore((s) => s.collapsedBuckets);
@@ -125,6 +129,13 @@ export function BucketSection({
                 newCommentCount={newCommentDeltas.get(pr.id) ?? 0}
                 onSelect={() => onSelect(pr.id)}
                 onOpen={() => onOpen(pr.url)}
+                authorFilterActive={
+                  authorFilterLogin?.toLowerCase() ===
+                  pr.author.login.toLowerCase()
+                }
+                onAuthorFilter={
+                  onAuthorFilter ? () => onAuthorFilter(pr.author) : undefined
+                }
               />
             ))
           )}

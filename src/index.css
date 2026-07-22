@@ -124,6 +124,34 @@ button {
   font-family: inherit;
 }
 
+.author-filter-button {
+  width: 28px;
+  height: 28px;
+  margin: -4px;
+  padding: 4px;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.author-filter-button:hover,
+.author-filter-button:focus-visible {
+  border-color: var(--info-line);
+  background: var(--info-bg);
+  outline: none;
+}
+
+.author-filter-button[aria-pressed='true'] {
+  border-color: var(--info);
+  box-shadow: 0 0 0 2px var(--info-bg);
+}
+
 .mono {
   font-family: var(--font-mono);
   font-feature-settings: 'zero';

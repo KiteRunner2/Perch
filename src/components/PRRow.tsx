@@ -25,6 +25,9 @@ interface PRRowProps {
   onSelect: () => void;
   /** Double-click opens the PR in a new tab. */
   onOpen: () => void;
+  /** Set or clear the exact-author filter. Only provided in Team scope. */
+  onAuthorFilter?: () => void;
+  authorFilterActive?: boolean;
 }
 
 function relTime(iso: string): string {
@@ -54,6 +57,8 @@ export function PRRow({
   newCommentCount,
   onSelect,
   onOpen,
+  onAuthorFilter,
+  authorFilterActive = false,
 }: PRRowProps) {
   const bg = focused ? 'var(--bg-3)' : 'transparent';
 
@@ -128,7 +133,27 @@ export function PRRow({
             flexShrink: 0,
           }}
         />
-        <Avatar user={pr.author} size={20} />
+        {onAuthorFilter ? (
+          <button
+            type="button"
+            className="author-filter-button"
+            aria-label={`${authorFilterActive ? 'Clear' : 'Filter by'} author @${pr.author.login}`}
+            aria-pressed={authorFilterActive}
+            title={`${authorFilterActive ? 'Clear' : 'Filter by'} author @${pr.author.login}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              // A browser double-click emits two click events first. Ignore
+              // the repeated click so the author filter toggles only once.
+              if (e.detail <= 1) onAuthorFilter();
+            }}
+            onDoubleClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            <Avatar user={pr.author} size={20} />
+          </button>
+        ) : (
+          <Avatar user={pr.author} size={20} />
+        )}
         <div
           style={{
             display: 'flex',
