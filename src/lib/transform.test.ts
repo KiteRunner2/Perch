@@ -60,6 +60,39 @@ function makeResponse(prs: GqlPullRequest[]): GqlDashboardResponse {
 }
 
 describe('transformDashboard', () => {
+  it('infers the Jira ticket from branch, title, then description', () => {
+    const fromBranch = makeGqlPR({
+      id: 'BRANCH',
+      headRefName: 'feature/krit-1431-discard-draft',
+      title: 'KRIT-1460 Add attachment drawer',
+      body: 'Resolves KRIT-1314.',
+    });
+    const fromTitle = makeGqlPR({
+      id: 'TITLE',
+      headRefName: 'feature/attachment-drawer',
+      title: 'KRIT-1460 Add attachment drawer',
+      body: 'Resolves KRIT-1314.',
+    });
+    const fromBody = makeGqlPR({
+      id: 'BODY',
+      headRefName: 'feature/attachment-drawer',
+      title: 'Add attachment drawer',
+      body: 'Resolves KRIT-1314.',
+    });
+    const withoutTicket = makeGqlPR({ id: 'NONE' });
+
+    const out = transformDashboard(
+      makeResponse([fromBranch, fromTitle, fromBody, withoutTicket])
+    );
+
+    expect(out.prs.map((pr) => [pr.id, pr.jiraTicketKey])).toEqual([
+      ['BRANCH', 'KRIT-1431'],
+      ['TITLE', 'KRIT-1460'],
+      ['BODY', 'KRIT-1314'],
+      ['NONE', null],
+    ]);
+  });
+
   it('drops PRs from archived repositories', () => {
     const active = makeGqlPR({ id: 'LIVE' });
     const archived = makeGqlPR({

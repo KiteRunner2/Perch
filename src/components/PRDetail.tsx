@@ -36,6 +36,7 @@ import { useSetDraftState } from '../hooks/useSetDraftState';
 import { useMergePullRequest } from '../hooks/useMergePullRequest';
 import { isEditableTarget } from '../hooks/useKeyboardNav';
 import { isReadyToMerge } from '../lib/bucketing';
+import { jiraTicketUrl } from '../lib/jira';
 import { reviewActionEnabled, type ReviewEvent } from '../lib/reviewActions';
 import { DIFF_FONT_MAX, DIFF_FONT_MIN, redactToken } from '../lib/storage';
 import { useUIStore } from '../store';
@@ -632,7 +633,7 @@ function PRInfoBlock({
 
       <BranchLine head={pr.headRefName} base={pr.baseRefName} />
 
-      <PRUrlLine url={pr.url} />
+      <PRUrlLine url={pr.url} jiraTicketKey={pr.jiraTicketKey} />
 
       {pr.labels.length > 0 && (
         <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -1027,14 +1028,24 @@ function BranchLine({ head, base }: { head: string; base: string }) {
   );
 }
 
-function PRUrlLine({ url }: { url: string }) {
-  const [copied, setCopied] = useState(false);
+function PRUrlLine({
+  url,
+  jiraTicketKey,
+}: {
+  url: string;
+  jiraTicketKey: string | null;
+}) {
+  const [copied, setCopied] = useState<'github' | 'jira' | null>(null);
+  const jiraUrl = jiraTicketKey ? jiraTicketUrl(jiraTicketKey) : null;
 
-  async function copy() {
+  async function copy(value: string, target: 'github' | 'jira') {
     try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1200);
+      await navigator.clipboard.writeText(value);
+      setCopied(target);
+      window.setTimeout(
+        () => setCopied((current) => (current === target ? null : current)),
+        1200
+      );
     } catch {
       /* ignore — clipboard may be blocked in some contexts */
     }
@@ -1047,49 +1058,113 @@ function PRUrlLine({ url }: { url: string }) {
         display: 'flex',
         alignItems: 'center',
         gap: 6,
+        flexWrap: 'wrap',
         fontSize: 11.5,
         fontFamily: 'var(--font-mono)',
         minWidth: 0,
       }}
     >
-      <a
-        href={url}
-        target="_blank"
-        rel="noreferrer"
-        title={url}
+      <span
         style={{
-          color: 'var(--accent)',
-          textDecoration: 'none',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
           minWidth: 0,
         }}
       >
-        {url.replace(/^https?:\/\//, '')}
-      </a>
-      <button
-        type="button"
-        onClick={copy}
-        title={copied ? 'Copied' : 'Copy URL'}
-        aria-label={copied ? 'Copied' : 'Copy PR URL'}
-        style={{
-          width: 20,
-          height: 20,
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          border: 'none',
-          borderRadius: 4,
-          background: 'transparent',
-          color: copied ? 'var(--ok)' : 'var(--fg-3)',
-          cursor: 'pointer',
-          flexShrink: 0,
-        }}
-      >
-        {copied ? <Check size={11} /> : <Copy size={11} />}
-      </button>
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          title={url}
+          style={{
+            color: 'var(--accent)',
+            textDecoration: 'none',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            minWidth: 0,
+          }}
+        >
+          {url.replace(/^https?:\/\//, '')}
+        </a>
+        <LinkCopyButton
+          copied={copied === 'github'}
+          label="PR URL"
+          onClick={() => void copy(url, 'github')}
+        />
+      </span>
+
+      {jiraTicketKey && jiraUrl && (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            flexShrink: 0,
+          }}
+        >
+          <span aria-hidden="true" style={{ color: 'var(--fg-3)' }}>
+            ·
+          </span>
+          <a
+            href={jiraUrl}
+            target="_blank"
+            rel="noreferrer"
+            title={jiraUrl}
+            style={{
+              color: 'var(--accent)',
+              textDecoration: 'none',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+            }}
+          >
+            Jira: {jiraTicketKey}
+            <ExternalLink size={10} aria-hidden="true" />
+          </a>
+          <LinkCopyButton
+            copied={copied === 'jira'}
+            label="Jira URL"
+            onClick={() => void copy(jiraUrl, 'jira')}
+          />
+        </span>
+      )}
     </div>
+  );
+}
+
+function LinkCopyButton({
+  copied,
+  label,
+  onClick,
+}: {
+  copied: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={copied ? 'Copied' : `Copy ${label}`}
+      aria-label={copied ? `${label} copied` : `Copy ${label}`}
+      style={{
+        width: 20,
+        height: 20,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        border: 'none',
+        borderRadius: 4,
+        background: 'transparent',
+        color: copied ? 'var(--ok)' : 'var(--fg-3)',
+        cursor: 'pointer',
+        flexShrink: 0,
+      }}
+    >
+      {copied ? <Check size={11} /> : <Copy size={11} />}
+    </button>
   );
 }
 

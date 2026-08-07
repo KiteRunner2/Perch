@@ -16,6 +16,7 @@ import type {
   TimelineEvent,
   TimelineEventKind,
 } from '../types/dashboard';
+import { findJiraTicketKey } from './jira';
 
 const AV_KEYS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 
@@ -311,6 +312,7 @@ export function transformPR(
     number: pr.number,
     title: pr.title,
     url: pr.url,
+    jiraTicketKey: findJiraTicketKey(pr.headRefName, pr.title, pr.body),
     isDraft: pr.isDraft,
     mergeable: pr.mergeable,
     updatedAt: pr.updatedAt,

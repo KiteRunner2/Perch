@@ -25,6 +25,7 @@ function makePR(overrides: Partial<DashboardPR> = {}): DashboardPR {
     number: 1,
     title: 'Example PR',
     url: 'https://github.com/example/repo/pull/1',
+    jiraTicketKey: null,
     isDraft: false,
     mergeable: 'MERGEABLE',
     updatedAt: new Date(now).toISOString(),

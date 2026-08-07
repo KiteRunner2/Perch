@@ -12,6 +12,7 @@ function makePR(
     number: 1,
     title: 'Improve the dashboard',
     url: `https://github.com/acme/perch/pull/${id}`,
+    jiraTicketKey: null,
     isDraft: false,
     mergeable: 'MERGEABLE',
     updatedAt: '2026-07-22T12:00:00Z',

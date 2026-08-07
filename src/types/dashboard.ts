@@ -66,6 +66,8 @@ export interface DashboardPR {
   number: number;
   title: string;
   url: string;
+  /** Kritik Jira ticket inferred from branch, title, or description. */
+  jiraTicketKey: string | null;
   isDraft: boolean;
   mergeable: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN';
   updatedAt: string;
