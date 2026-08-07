@@ -1,6 +1,6 @@
 const JIRA_KEY_PATTERN = /(?:^|[^A-Z0-9])(KRIT-\d+)(?![A-Z0-9])/i;
 
-export const JIRA_BROWSE_URL = 'https://kritik.atlassian.net/browse';
+export const JIRA_BROWSE_URL = 'https://kritikio.atlassian.net/browse';
 
 /** Return the first Kritik Jira key found in the supplied values. */
 export function findJiraTicketKey(

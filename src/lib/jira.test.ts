@@ -30,7 +30,7 @@ describe('findJiraTicketKey', () => {
 describe('jiraTicketUrl', () => {
   it('builds the Kritik Jira browse URL', () => {
     expect(jiraTicketUrl('KRIT-1431')).toBe(
-      'https://kritik.atlassian.net/browse/KRIT-1431'
+      'https://kritikio.atlassian.net/browse/KRIT-1431'
     );
   });
 });
